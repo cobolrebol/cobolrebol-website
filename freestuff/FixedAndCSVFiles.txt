@@ -1,0 +1,2761 @@
+Fixed-format and CSV files
+
+    Part of the power of REBOL is that it recognizes so many kinds of data
+    based just on appearance.  A string of digits with one decimal point is
+    recognized as a decimal number.  If there is a currency symbol in front,
+    it is recognized as currency.  A string of characters in a specific
+    format is automatically recognized as a date.  An environment of data
+    like this is the natural habitat of REBOL.
+
+    Sometimes it is necessary to work outside of that habitat, in the 
+    primitive world of fixed-format files and delimited files, like CSV 
+    files.  REBOL can function in this world also, but it is not necessarily
+    obvious how.  
+
+    This document explains some approaches for working with this non-native
+    type of data, and offers some tools to make the job easier.
+    
+===The target audience
+
+The target audience for this document would be those who for some reason must
+work with fixed-format files or delimited files like CSV files.  A person
+might not have access to programming languages better suited to this kind of 
+data, or might want to use REBOL just because he wants to.  
+REBOL does have the advantage of being available at no cost, and with a 
+little pre-programming actually can be faster than other choices.  
+
+\note Age-appropriateness warning 
+
+If you never have even heard of the concept of fixed-format data,
+this document could be meaningless for you. 
+
+/note
+
+References:
+
+<a href="http://business-programming.com/business_programming.html#section-2.11">
+CSV section of Creating Business Applications With REBOL</a> 
+
+<a href="http://www.rebol.org/view-script.r?script=csv.r">
+csv.r script at rebol.org</a>
+
+<a href="http://www.rebol.org/view-script.r?script=csv-tools.r">
+csvtools.r script at rebol.org</a>
+ 
+<a href="http://tools.ietf.org/html/rfc4180">
+An RFC for CSV files, believe it or not</a>
+
+<a href="http://www.rebol.com/docs/core23/rebolcore.html">
+REBOL/Core manual, for the concepts</a>
+
+<a href="http://www.rebol.com/docs/dictionary.html">
+Function dictionary for specific function details</a>
+
+===Preliminary notes and setup 
+
+---File formats
+
+The CSV file format should be fairly familiar.  It is a text file of lines,
+where each line is a separate "record" of data containing items of data
+separated by a delimiter, usually a comma.  The data items in each position
+on each line are instances of the same thing.  In other words, if the first
+data item on the first line is a name in the form of a string, then the first
+data item on every line is a name in form of a string.  The file usually is
+a text file where the length of a line can vary, and each line ends with the
+standard line terminator referred to in REBOL code as "newline." 
+
+In many cases, the first line of such a file contains not data, but words
+that identify the "columns" of data.  In this document we will assume that
+we are working with such files, where the first line contains column headings
+and the remaining lines contain data.  This is a type of file that actually has
+some use, in contrast to a file with no heading line where you don't know what
+the data items represent.
+
+A fixed-format file is familiar to programmers of a certain age.
+The classic such file is a deck of punch cards, where one rectangular card
+could hold 80 characters of information, with one character being coded by
+a column of holes punched through the card.  In such a record of data, the
+meaning of an item was indicated by its position on the card, and the type
+of data was known only to a computer program at the time the program was
+compiled.  For example, a record of data could have, in part,
+
+    ---------1---------2---- ...
+    1---+----0----+----0---- ...
+    ------------------------ ...
+    JORDAN    05031960123456 ...
+
+and what this would mean was that positions 1 through 10 is some alphabetic
+characters, positions 11 through 18 is some numbers, and positions 19 through
+24 is some more numbers.  The facts that the first field is a name, and is a
+name of a town and not a person; that the second field is a date in mmddyyyy
+format; that the third field is a currency amount with four digits to the left 
+of the decimal point and two to the right; are facts known only to the program
+that reads the data, and are set at the time the program is compiled.
+In other words, the meanings and the data types must be defined at compile 
+time.  Also, any formatting for display or printing must be done by a program.
+
+In REBOL, if such data were on a line in a text file, it would look like this:
+
+    "JORDAN" 03-MAY-1960 $1234.56
+
+and any program reading that data could identify the types of data from the
+formats.  Also, any formatting for display or printing is automatically done
+because the format is part of the data; it's what gives the data its type
+in the first place.
+
+The first kind of data is the subject of this document.  It is data that one
+still might encounter from computer systems of the past. In the past,
+programming languages worked at a lower level of abstraction.  In addition,
+storage was smaller and computers were slower, so data was stored a bit 
+more compactly and in a format closer to what was necessary to work with the
+data.  In other words, currency might be just the numbers because it could
+be used in a calculation more directly, without first having to pull the
+actual value out of the currency symbol and decimal point. 
+
+---Running REBOL
+
+The eddies and currents of internet surfing probably would not bring you
+to this document unless you know REBOL, but just in case, we will have a
+quick summary.
+
+REBOL is a programming language available at www.rebol.com.
+If you are a programmer, you should try it.  It is free as in beer, and
+can be downloaded at
+<a
+href="http://www.rebol.com/download-view.html">www.rebol.com/download-view.html
+</a>
+
+REBOL has a command-line interface where you can type commands, and you 
+also can write scripts and have the interpreter run them.  
+
+A REBOL script must start with a header in a particular format, and then
+after the header is whatever commands you need to implement your program.
+The example below shows a basic REBOL program.
+
+There are a few different ways you can run a REBOL script.
+
+*For Windows, install REBOL, name your script with the extension of dot-r,
+then double-click the script file.
+
+*For Windows, write a DOS batch file that runs the REBOL interpreter
+with the command-line switch of "--script" to identify the script
+file.
+
+*For other platforms, run REBOL/View, open the command console, and 
+type "do %file-name.r" to run a script called "file-name.r."
+
+*For all platforms, write your script using the built-in editor 
+(the "editor" command) and then press the F5 key to cause the
+script to be run. 
+
+*And finally, you may copy the code below and save it in a file in
+the same folder where you are running examples.  
+You could call it, for example, cliprun.r.
+What this program does
+is execute a complete REBOL program found on the Windows clipboard.
+So you would copy a demo script from this document, then run the
+program below, and see the results of the demo script.
+
+    REBOL [
+        Title: "Run clipboard VID example"
+    ]
+    VID-CLIP: load clipboard://
+    do VID-CLIP 
+
+---Generating test data
+
+The examples in this document will need some test data, so we will base
+them on some little text files that you may put on your computer using
+the following program.  The rest of this document will assume that you
+have done so.
+
+    REBOL [
+        title: "Generate test files"
+    ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Run this script to generate some test files.                              ]
+    ;; [ We will write a handful of records with generally meaninless data of      ]
+    ;; [ different types, in three formats.                                        ]
+    ;; [ One format will be the way REBOL natively handles data, where the         ]
+    ;; [ appearance of a data item indicates its type.                             ]
+    ;; [ Another format will be a csv file where the names of the data items       ]
+    ;; [ are indicated by an initial row of column names.                          ]
+    ;; [ Another format will be fixed, where a data items is identified by its     ]
+    ;; [ character position in a record, plus its length.                          ]
+    ;; [---------------------------------------------------------------------------]
+
+    TEST-REBOL-FILE-ID: %test-rebolformat.txt
+    TEST-REBOL-DATA: {"Jordan" "1801 Main St" #612-926-1001 01-JAN-2001 $1234.56 "X1" 21
+    "James" "1802 Main St" #612-926-1002 02-FEB-2002 $2345.67 "X2" 22
+    "Jeremy" "1803 Main St" #612-926-1003 03-MAR-2004 $3456.78 "X3" 23}
+
+    TEST-CSV-FILE-ID: %test-csvformat.csv
+    TEST-CSV-DATA: {NAME,ADDRESS,PHONE,DATE,AMT,CODE,COUNT
+    "Jordan","1801 Main St",612-926-1001,01-JAN-2001,1234.56,"X1",21
+    "James","1802 Main St",612-926-1002,02-FEB-2002,2345.67,"X2",22
+    "Jeremy","1803 Main St",612-926-1003,03-MAR-2004,3456.78,"X3",23}
+
+    TEST-FIXED-FILE-ID: %test-fixedformat.txt
+    TEST-FIXED-DATA: {Jordan    1801 Main St        612926100101-JAN-20010123456X121
+    James     1801 Main St        612926100202-FEB-20020234567X122
+    Jeremy    1801 Main St        612926100303-MAR-20040345678X123}
+
+    write/lines TEST-REBOL-FILE-ID TEST-REBOL-DATA
+    write/lines TEST-CSV-FILE-ID TEST-CSV-DATA
+    write/lines TEST-FIXED-FILE-ID TEST-FIXED-DATA
+
+    alert "Test data created"
+   
+---Prerequisite knowlege
+
+A document that tries to explain some particular thing, but then also
+tries to explain all the prerequisite knowledge needed to understand
+the main explaination, would be a big document.  We must stand on the
+shoulders of others.  You will have to learn generally how to use
+REBOL, and then become familiar with the "series" datatype and the
+functions that operate on series.  A "series" is a datatype in REBOL
+that is used for various kinds of "one thing after another."
+Specifically for use here, that means strings, which are series of
+characters, and blocks, which are a REBOL internal format for storing
+one thing after another, and are represented in source code by
+one thing after another surrounded by square brackets.  Here is the
+reference:
+
+<a href="http://www.rebol.com/docs/core23/rebolcore-6.html">
+REBOL/Core user manual, chapter 6</a>
+
+Also of relevance is the fact that we will be dealing with strings
+of data, which are a special type of REBOL series.
+Here is the reference for that.
+
+<a href="http://www.rebol.com/docs/core23/rebolcore-8.html">
+REBOL/Core user manual, chapter 8</a>
+
+===Relevant REBOL functions
+
+REBOL uses variants of the "series" datatype to represent the concept of
+"one thing after another."  A string, such as a line from a text file,
+is a series of characters.  A block, such as all the lines of a text file
+stored in memory, is a series of lines.  
+
+Certain REBOL functions are good matches for the things we have to do
+with these kinds of files.  The "parse" function is a one-liner to take
+apart a CSV record based on the commas.  The "skip" and "copy" functions
+are one-liners for extracting substrings of fixed-format data.
+
+Here are those datatypes and functions in action.  We will be doing this
+kind of manipulation when working with these files.  Some of the 
+examples below use the test files defined above.
+
+Depending on circumstances, the code samples below could be fragments
+or whole scripts.  If you see a REBOL header at the front, it is a
+whole script which you may copy out, save on your computer, and run.
+If there is no REBOL header, it is a fragment, and to run it you 
+would copy it out and paste it into a file under a REBOL header.
+Or, if it short, you could paste into a REBOL console command line
+prompt and press the "enter" key.
+Sometimes it makes more sense to present a fragment, sometimes a whole
+script. Currently, all samples are complete scripts.
+
+When you see other text that does not look like REBOL code, it should
+be the output of REBOL code, pasted into this document to save you the
+time from running the code yourself.  Context should make all this
+clear.
+
+---Reading data files
+
+Usually, when dealing with text files, it is customary to read the whole
+file into memory.  When computer were smaller, this was sometimes thought
+inefficient, but today, when computers have lots of memory, it is 
+reasonable to bring a whole file into memory.  If a file is so big that
+it can't be brought into memory, one might ask if some redisign of an
+application might be appropriate.  
+
+The demo script below shows the main ways of reading a file into memory
+and what the result is.  The results, plus discussion, follow the script.
+
+    REBOL [
+        title: "'read variations"
+    ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Show what happens when you read files in various ways.                    ]
+    ;; [---------------------------------------------------------------------------]
+
+    TEST-REBOL-FILE-ID: %test-rebolformat.txt
+    TEST-CSV-FILE-ID: %test-csvformat.csv
+    TEST-FIXED-FILE-ID: %test-fixedformat.txt
+
+    print ["Execute REBOL-DATA: read/binary " TEST-REBOL-FILE-ID]
+    REBOL-DATA: read/binary TEST-REBOL-FILE-ID
+    print ["REBOL-DATA is type " type? REBOL-DATA ", length " length? REBOL-DATA]
+    print ["REBOL-DATA/1 is type " type? REBOL-DATA/1 " = " REBOL-DATA/1]
+    print "----------------------"
+
+    print ["Execute CSV-DATA: read " TEST-CSV-FILE-ID]
+    CSV-DATA: read TEST-CSV-FILE-ID
+    print ["CSV-DATA is type " type? CSV-DATA ", length " length? CSV-DATA]
+    print ["CSV-DATA/1 is type " type? CSV-DATA/1 " = " CSV-DATA/1]
+    print "----------------------"
+
+    print ["Execute FIXED-DATA: read/lines " TEST-FIXED-FILE-ID]
+    FIXED-DATA: read/lines TEST-FIXED-FILE-ID
+    print ["FIXED-DATA is type " type? FIXED-DATA ", length " length? FIXED-DATA]
+    print ["FIXED-DATA/1 is type " type? FIXED-DATA/1 " = " FIXED-DATA/1]
+    print ["FIXED-DATA/2 is type " type? FIXED-DATA/2 " = " FIXED-DATA/2]
+    print ["FIXED-DATA/3 is type " type? FIXED-DATA/3 " = " FIXED-DATA/3]
+    print "----------------------"
+
+    print ["Execute LOADED-DATA: load " TEST-REBOL-FILE-ID]
+    LOADED-DATA: load TEST-REBOL-FILE-ID
+    print ["LOADED-DATA is type " type? LOADED-DATA ". length " length? LOADED-DATA]
+    print ["LOADED-DATA/1 is type " type? LOADED-DATA/1 " = " LOADED-DATA/1]
+    print ["LOADED-DATA/2 is type " type? LOADED-DATA/2 " = " LOADED-DATA/2]
+    print ["LOADED-DATA/3 is type " type? LOADED-DATA/3 " = " LOADED-DATA/3]
+    print ["LOADED-DATA/4 is type " type? LOADED-DATA/4 " = " LOADED-DATA/4]
+    print ["LOADED-DATA/5 is type " type? LOADED-DATA/5 " = " LOADED-DATA/5]
+    print ["LOADED-DATA/6 is type " type? LOADED-DATA/6 " = " LOADED-DATA/6]
+    print ["LOADED-DATA/7 is type " type? LOADED-DATA/7 " = " LOADED-DATA/7]
+    print "----------------------"
+
+    print "Probe around now if you have more questions"
+    halt 
+   
+The result: 
+
+    Execute REBOL-DATA: read/binary  test-rebolformat.txt
+    REBOL-DATA is type  binary , length  203
+    REBOL-DATA/1 is type  integer  =  34
+    ----------------------
+    Execute CSV-DATA: read  test-csvformat.csv
+    CSV-DATA is type  string , length  234
+    CSV-DATA/1 is type  char  =  N
+    ----------------------
+    Execute FIXED-DATA: read/lines  test-fixedformat.txt
+    FIXED-DATA is type  block , length  3
+    FIXED-DATA/1 is type  string  =  Jordan    1801 Main St        61292610010123456X121
+    FIXED-DATA/2 is type  string  =  James     1801 Main St        61292610020234567X122
+    FIXED-DATA/3 is type  string  =  Jeremy    1801 Main St        61292610030345678X123
+    ----------------------
+    Execute LOADED-DATA: load  test-rebolformat.txt
+    LOADED-DATA is type  block . length  21
+    LOADED-DATA/1 is type  string  =  Jordan
+    LOADED-DATA/2 is type  string  =  1801 Main St
+    LOADED-DATA/3 is type  issue  =  612-926-1001
+    LOADED-DATA/4 is type  date  =  1-Jan-2001
+    LOADED-DATA/5 is type  money  =  $1234.56
+    LOADED-DATA/6 is type  string  =  X1
+    LOADED-DATA/7 is type  integer  =  21
+    ----------------------
+    Probe around now if you have more questions
+    >>
+
+Examine the results of the various forms of "read."
+
+If you are not totally familiar with REBOL, notice how the "read" function
+returns a result, and the word with a colon after it means that the
+word refers to that result.  You can think of it as setting a variable to
+the results of the "read" function, but in the deep theoretically innards
+of REBOL there is a difference, which is not important here.
+
+The "binary" option results in the file exactly as it is on disk.
+This option is used for reading things with unprintable characters, like
+images.  You get a big string of bytes.  The value of the first byte above,
+"34," is the decimal location of the ascii double-quote in the table of
+ascii characters.  This document is about text data, so we will not use the
+"binary" option.
+
+The plain "read" function brings the entire file into one big string in
+memory.  This is a little more useful, but in this document we are worrying
+about mainly data files of "records," which means that a file contains many
+"records," which all are similar in that they contain the same kinds of data
+in the same order.  In other words, a file of business contacts might contain
+many "records," one for each contact, and each record might contain name,
+address, phone, and so on.  So the plain "read" function is a little too 
+low-level for easy use.
+
+The "lines" option results in a block, with each item in the block being
+one line in the file, existing as a string.  With all the lines in a block,
+we can go through the block a line at a time, and then to get the data 
+out of a line we have to know where on the line it is, or, if the file is
+a delimited file, we have to take apart the line based on the delimiter to
+get its component parts.  The various ways of doing that are the topic of
+this document.
+
+As a side note, notice what happens if a file contains data items in 
+recognized REBOL format, and the file is brought into memory with the
+"load" function.  The result is a block, each item in the block is a data
+item from the file, and each data item is recognized as its particular
+type, all automatically.  If you are designing an application, this would
+be the way to go for designing your data; use REBOL data types.
+REBOL gives you power.
+
+---Looping through data files
+
+So the most useful way to read a text data file seems to be with the "lines"
+refinement to get a block of lines.  A very common operation will be to do
+something to each line of the input file, and then optionally transfer that
+modified line to an output file.  The following demo script shows this, and
+because of REBOL's rather high level, the program itself is close to 
+the pseudo-code one might use to document it. 
+
+    REBOL [
+        title: "Copying a text file"
+    ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Copy a text file line by line without making any changes.                 ]
+    ;; [---------------------------------------------------------------------------]
+
+    TEST-FIXED-FILE-ID: %test-fixedformat.txt
+    OUTPUT-FILE-ID: %test-output.txt
+    OUTPUT-FILE: copy [] 
+
+    INPUT-FILE: read/lines TEST-FIXED-FILE-ID
+
+    foreach INPUT-LINE INPUT-FILE [
+        append OUTPUT-FILE INPUT-LINE
+    ]
+
+    write/lines OUTPUT-FILE-ID OUTPUT-FILE
+
+    alert "File copied"
+    
+Notice how creating the output file paralleled reading the input file.
+The input file was stored as a block of lines with the "read/lines" operation.
+The output file was built up a line at a time by appending new lines to
+the empty block of lines called "OUTPUT-FILE."  When we were done adding
+lines, we put the output data on disk with the "write/lines" operation.
+
+---Working with strings 
+
+So now that we have determined that the most likely things we will do 
+will be to work on lines, in string format, from a text file, one line at
+a time, we have to find the REBOL functions that allow us to do that.
+These will be the functions that work on series data, and not all of
+those functions, just some, the ones useful to our data extraction
+and comparison operations.
+
+For fixed-format files, data items are in certain positions and must remain
+there.  So, the functions we will use most are those that pull data out
+of specific locations and put data into specific locations, without
+changing the character positions of other data items.
+
+The following script and the following results show that import functions
+for these operations.
+
+    REBOL [
+        title: "Useful string functions"
+    ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Show the REBOL functions useful for working with strings.                 ]
+    ;; [---------------------------------------------------------------------------]
+
+    STR: copy "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print "----------------------------------"
+    print "Move around in STR"
+    print ["STR: next STR"]
+    STR: next STR
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print ["Execute: STR: skip STR 25"]
+    STR: skip STR 25
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print ["Execute: STR: at STR 10"]
+    STR: at STR 10
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print ["Execute: STR: head STR"]
+    STR: head STR
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print ["Execute: STR: at STR 10"]
+    STR: at STR 10
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print "----------------------------------"
+    print "Extract substrings"
+    STR: head STR
+    SUB: copy ""
+    print ["Execute: SUB: copy/part STR 10"]
+    SUB: copy/part STR 10
+    print ["SUB =" SUB]
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    SUB: copy ""
+    print ["Execute: SUB: copy/part at STR 27 10"]
+    SUB: copy/part at STR 27 10
+    print ["SUB =" SUB]
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print "----------------------------------"
+    print "Insert at various places, shifting existing data"
+    STR: head STR
+    REP: copy "**"
+    print ["Execute: insert STR REP"]
+    insert STR REP
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    REP: copy "**"
+    print ["Execute: append STR REP"]
+    append STR REP
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    REP: copy "**"
+    print ["Execute: insert at STR 5 REP"]
+    insert at STR 5 REP
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print "----------------------------------"
+    print "Change existing data with no shifting"
+    STR: copy "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+    REP: copy "**"
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print ["Execute: STR: skip STR 10"]
+    STR: skip STR 10
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print ["Execute: change STR REP"]
+    change STR REP
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print ["Execute: STR: head STR"]
+    STR: head STR
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print ["Execute: change at STR 27 REP"]
+    change at STR 27 REP
+    print ["STR =" STR ", Index =" index? STR ", Length =" length? STR]
+    print "----------------------------------"
+
+    print "Probe around if you have questions"
+    halt 
+    
+Results of running the above:
+
+    STR = ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 , Index = 1 , Length = 36
+    ----------------------------------
+    Move around in STR
+    STR: next STR
+    STR = BCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 , Index = 2 , Length = 35
+    Execute: STR: skip STR 25
+    STR = 1234567890 , Index = 27 , Length = 10
+    Execute: STR: at STR 10
+    STR = 0 , Index = 36 , Length = 1
+    Execute: STR: head STR
+    STR = ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 , Index = 1 , Length = 36
+    Execute: STR: at STR 10
+    STR = JKLMNOPQRSTUVWXYZ1234567890 , Index = 10 , Length = 27
+    ----------------------------------
+    Extract substrings
+    Execute: SUB: copy/part STR 10
+    SUB = ABCDEFGHIJ
+    STR = ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 , Index = 1 , Length = 36
+    Execute: SUB: copy/part at STR 27 10
+    SUB = 1234567890
+    STR = ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 , Index = 1 , Length = 36
+    ----------------------------------
+    Insert at various places, shifting existing data
+    Execute: insert STR REP
+    STR = **ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 , Index = 1 , Length = 38
+    Execute: append STR REP
+    STR = **ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890** , Index = 1 , Length = 40
+    Execute: insert at STR 5 REP
+    STR = **AB**CDEFGHIJKLMNOPQRSTUVWXYZ1234567890** , Index = 1 , Length = 42
+    ----------------------------------
+    Change existing data with no shifting
+    STR = ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 , Index = 1 , Length = 36
+    Execute: STR: skip STR 10
+    STR = KLMNOPQRSTUVWXYZ1234567890 , Index = 11 , Length = 26
+    Execute: change STR REP
+    STR = **MNOPQRSTUVWXYZ1234567890 , Index = 11 , Length = 26
+    Execute: STR: head STR
+    STR = ABCDEFGHIJ**MNOPQRSTUVWXYZ1234567890 , Index = 1 , Length = 36
+    Execute: change at STR 27 REP
+    STR = ABCDEFGHIJ**MNOPQRSTUVWXYZ**34567890 , Index = 1 , Length = 36
+    ----------------------------------
+    Probe around if you have questions
+    >>
+
+When you set up a string, normally you define a word to refer to it.
+Using various navigation functions, you can make that word, or some other
+word, refer to the string starting at different locations.  So you can
+index your way through a string, but for operations on fixed-format data,
+the most common operations are going to be to extract or replace data in
+specific locations, so the "at," "copy," and "change" functions are going 
+to be the most commonly-used.  A key feature to notice is how "change"
+works if the thing you are changing is a string.  REBOL will change the
+string starting at the given location, and replace characters in the
+destination with characters from the source, one by one, until it has 
+used up the source.  
+
+\note Words versus variables
+
+In the above samples, you see things like "STR: skip STR 10."
+If you have the third-generation-programming reflex, you might read that
+as setting the STR variable to what you get if you skip ten items into
+the STR variable.  You can become confused if you think that way.
+What that code item means is to make the STR word refer to the whole
+STR string from position 10 to the end.  STR is more like a word that
+refers to data than a variable that holds data.  
+
+/note
+
+---Parsing delimited data
+
+For delimited data, as in a CSV file, REBOL has another trick up its sleeve
+in the form of the "parse" function.  That function has a lot of power, and
+thus a lot of confusion in its use, but fortunately we need only one feature,
+which is the feature of dividing up a string of characters based on some
+delimiter.  
+
+Here is a demo program to parse a string of comma-delimited data.
+Results and discussion follow.
+
+    REBOL [
+        title: "Simple parsing"
+    ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Show the REBOL functions useful for delimited data.                       ]
+    ;; [---------------------------------------------------------------------------]
+
+    STR: copy {STRINGOFCHARS , " with  spaces " , 25 , $123.45}
+
+    print ["STR =" STR]
+    print [{Execute: PARTS: parse/all STR ","}]
+    PARTS: parse/all STR ","
+    print "----------------------------------"
+    print "Raw parsed data"
+    print rejoin ["PARTS/1 ='" PARTS/1 "', type " type? PARTS/1 ", length " length? PARTS/1]
+    print rejoin ["PARTS/2 ='" PARTS/2 "', type " type? PARTS/2 ", length " length? PARTS/2]
+    print rejoin ["PARTS/3 ='" PARTS/3 "', type " type? PARTS/3 ", length " length? PARTS/3]
+    print rejoin ["PARTS/4 ='" PARTS/4 "', type " type? PARTS/4 ", length " length? PARTS/4]
+    print "----------------------------------"
+    print "Trimmed parsed data"
+    trim PARTS/1
+    trim PARTS/2
+    trim PARTS/3
+    trim PARTS/4
+    print rejoin ["PARTS/1 ='" PARTS/1 "', type " type? PARTS/1 ", length " length? PARTS/1]
+    print rejoin ["PARTS/2 ='" PARTS/2 "', type " type? PARTS/2 ", length " length? PARTS/2]
+    print rejoin ["PARTS/3 ='" PARTS/3 "', type " type? PARTS/3 ", length " length? PARTS/3]
+    print rejoin ["PARTS/4 ='" PARTS/4 "', type " type? PARTS/4 ", length " length? PARTS/4]
+    print "----------------------------------"
+    print "Converted parsed data"
+    P1: to-word copy PARTS/1
+    P2: to-string trim trim/with copy PARTS/2 {"} ; first trim quotes, then spaces
+    P3: to-integer copy PARTS/3
+    P4: to-money copy PARTS/4
+    print rejoin ["P1 ='" P1 "', type " type? P1]
+    print rejoin ["P2 ='" P2 "', type " type? P2]
+    print rejoin ["P3 ='" P3 "', type " type? P3]
+    print rejoin ["P4 ='" P4 "', type " type? P4]
+    print "----------------------------------"
+
+    print "Probe around if you have questions"
+    halt 
+
+Results of running the above script: 
+
+    STR = STRINGOFCHARS , " with  spaces " , 25 , $123.45
+    Execute: PARTS: parse/all STR ","
+    ----------------------------------
+    Raw parsed data
+    PARTS/1 ='STRINGOFCHARS ', type string, length 14
+    PARTS/2 =' " with  spaces " ', type string, length 18
+    PARTS/3 =' 25 ', type string, length 4
+    PARTS/4 =' $123.45', type string, length 8
+    ----------------------------------
+    Trimmed parsed data
+    PARTS/1 ='STRINGOFCHARS', type string, length 13
+    PARTS/2 ='" with  spaces "', type string, length 16
+    PARTS/3 ='25', type string, length 2
+    PARTS/4 ='$123.45', type string, length 7
+    ----------------------------------
+    Converted parsed data
+    P1 ='STRINGOFCHARS', type word
+    P2 ='with  spaces', type string
+    P3 ='25', type integer
+    P4 ='$123.45', type money
+    ----------------------------------
+    Probe around if you have questions
+    >>
+
+The "parse" function takes a string of characters, which can be huge,
+as in an entire web page, and splits it up according to rules.
+The result is a block, with each item being what was taken from
+the source between the delimiters.
+
+The "parse" function is designed with some defaults, for splitting on
+spaces and common punctuation.  So if you want to split on commas
+only, you must so specify.  But that could leave some spaces that you
+might not want.  If that happens, you will have to trim the results.
+Note by the way that the "trim" function does not make a copy of
+what you are trimming.  
+
+If your source data comes out of a popular spreadsheet program, as in
+a spreadsheet saved as a csv file, then items with ceratain special
+characters, especially commas, will be enclosed in quotes.  That can
+cause confusion.  In the parsed result, an item with quotes will have
+those quotes as part of the data, which you would not want.
+To get rid of those, you would use the "trim/with" function.
+Exactly what to trim from what would have to be determined on a case
+by case basis.
+
+The results of the "parse" function, as indicated, is a block.
+It is a block of strings.  In other words, if there is data that really
+is not a string and you want to work with it as it really is, you will
+have to know what it is and apply appropriate conversion functions.  
+If you are dealing with a source file that is so foreign to you that
+you don't know what is in it, and you want to take it apart in such
+an automated manner that you don't have to know in advance what is
+in it, you could try the REBOL "load" function on each item to see
+if it comes in as a REBOL datatype, and then check for errors if it
+does not, but that is beyond the scope of this document.
+We are assuming that you are working with some data known to you
+and your job is to take it apart, do some stuff with it, and possibly
+put it back together again.
+
+---Stringing things together
+
+In an environment of "legacy" data where files are formatted in ways
+that are less common now but were more common previously, the most
+likely operation you will perform will be reading them, but you also
+might have to create them.  One very easy approach is to set up an
+empty string in your program and then add to that string with the
+"append" function.  An easy thing to append is a big string consisting
+of all the data items you want in one record, with the "newline"
+character at the end.  To string together all the data items that belong
+in one record, the "rejoin" function works well.  The "rejoin" function
+takes a block of all the items you want to join together.  The reason
+it is called "rejoin" is because that is short for "reduce" and "join."
+What that means is that REBOL "reduces" the block by evaluating any
+words in the block and replacing them with their values, and then "joins"
+all the values together with no intervening spaces. The example below
+shows this.  There are other approaches.  One could append to a block
+instead of to a string.  One could use the "write/append" function to
+write to an existing file.  It might be easiest to just pick a way
+and use it until your are very comfortable with it.
+
+    REBOL [
+        title: "appending"
+    ] 
+
+    OUTPUT-CSV-ID: %test-out.csv
+    OUTPUT-FIXED-ID: %test-out.txt
+
+    OUTPUT-CSV: copy []     ;; block works but...
+    OUTPUT-FIXED: copy ""   ;; so does a string.
+
+    DATA-1: "Mr. Smith"
+    DATA-2: "Cleveland, OH"
+    DATA-3: 123.45
+
+    append OUTPUT-CSV rejoin [
+        DATA-1 ","
+        mold DATA-2 ","
+        DATA-3
+        newline
+    ]
+
+    append OUTPUT-FIXED rejoin [
+        DATA-1
+        DATA-2
+        DATA-3
+        newline
+    ]
+
+    write/lines OUTPUT-CSV-ID OUTPUT-CSV
+    write/lines OUTPUT-FIXED-ID OUTPUT-FIXED 
+    
+    alert "Done"
+    
+Note that the above sample appends lines to a block or a string.  It doesn't
+seem to matter.  The "write/lines" function still will recognize lines and
+write them to disk properly.  Here are the results of the above.
+
+For the CSV file:
+
+    Mr. Smith,"Cleveland, OH",123.4
+
+For the fixed-format file:
+
+    Mr. SmithCleveland, OH123.45
+
+Notice one little thing.  It seems to be common for fields that contain 
+commas in a comma-delimited file to be enclosed in quotes.  If you have
+string data and want it to contain quotes, you use the "mold" function.
+The "mold" function converts an item of REBOL data into the form that
+it would have if it were in a person-readable format and being loaded
+by a REBOL program.  In other words, if you had some string data, perhaps
+something that you typed by hand, you would indicate that it was a string
+by putting quotes around it.  Then, REBOL would recognize that as a
+string and store it appropriately in memory.  If you then printed it or
+put it into a file, it would go there without the quotes because the
+quotes were just there originally to indicate that it was a string.
+If you wanted the data to be printed or stored with the quotes so that
+REBOL could read it back again, you would use the "mold" function. 
+
+Other functions that will be useful when working with non-REBOL data
+will be the various "to-" functions that convert from one data type to
+another.  Most commonly, you will extract strings of digits from text
+and expect them to be numbers, so you will use the "to-integer" or
+"to-decimal" to transform them into something that can be used in
+calculation.  Then, to put them back into a text file, you will use the
+"to-string" function to make them into strings so they can be joined
+to other strings.  
+
+===Our own functions
+
+When extracting data out of various places, or putting data into them,
+formatting issues can arise.  This chapter shows some functions that
+can be helpful in twisting data around to make it more useful.
+Code samples below are complete functions that you can use as they
+are or modify.  In the code presented, there will be statements at
+the end which, if uncommented, will cause the script to run like a
+program and "test" the functions contained in the script.
+
+---ENCOMMA/DECOMMA
+
+One of the sources, or sometimes destinations, of flat files is the
+ubiquitous and evil spreadsheet, where people can load up data in any
+form they like and expect others to work with it successfully.
+Spreadsheet cells containing numbers can have those numbers in all sorts
+of formats, and sometimes it is necessary to "de-format" them, or to
+produce numbers in cosmetically-enhanced formats.  These functions
+put commas into an integer to make it look pretty, or take commas out
+of an integer to make it useful.
+
+    REBOL [
+        title: "Encomma/decomma functions"
+    ] 
+
+    DECOMMA: func [
+        DC-INPUT [string!]
+        /local
+            DC-OUTPUT
+    ] [
+        DC-OUTPUT: to-integer replace/all copy DC-INPUT "," ""
+        return DC-OUTPUT
+    ]
+    
+    ENCOMMA: func [
+        EC-INPUT [integer!]
+        /local
+            EC-WORK
+            EC-LENGTH
+            EC-LEFT
+            EC-123
+            EC-OUTPUT
+    ] [
+        EC-WORK: copy ""
+        EC-WORK: reverse to-string EC-INPUT  ;; must work from right to left
+        EC-LENGTH: length? EC-WORK
+        EC-LEFT: EC-LENGTH
+        EC-123: 0
+        EC-OUTPUT: copy ""
+        foreach EC-DIGIT EC-WORK [
+            append EC-OUTPUT EC-DIGIT    ;; output one digit
+            EC-123: EC-123 + 1           ;; count a group of three
+            EC-LEFT: EC-LEFT - 1         ;; note how many are left
+            if equal? EC-123 3 [         ;; if we have emitted three digits...
+                EC-123: 0
+                if greater? EC-LEFT 0 [  ;; ...and there are more to emit...
+                    append EC-OUTPUT "," ;; ...emit a comma
+                ]
+            ]
+        ]
+        EC-OUTPUT: reverse EC-OUTPUT     ;; undo that first reverse 
+        return EC-OUTPUT
+    ]
+
+    ;; -- Un-comment to test:
+    ;X: DECOMMA "123,456,789"
+    ;print [X " is an " type? X]
+    ;Y: ENCOMMA 123456789
+    ;print [Y " is a " type? Y]
+    ;halt
+    
+---SUBSTRING
+
+With the "at" and "copy/part" functions, it is almost more work to write
+a substring function, but here is one harvested from the rebol.org
+webiste.
+
+    REBOL [
+        title: "SUBSTRING function"
+    ] 
+
+    SUBSTRING: func [
+        "Return a substring from the start position to the end position"
+        INPUT-STRING [series!] "Full input string"
+        START-POS    [number!] "Starting position of substring"
+        END-POS      [number!] "Ending position of substring"
+    ] [
+        if END-POS = -1 [END-POS: length? INPUT-STRING]
+        return skip (copy/part INPUT-STRING END-POS) (START-POS - 1)
+    ]
+
+    ;; Uncomment to test
+    ;STR: "ABCDEFGHIJKLMMOPQRSTUVWXYZ"
+    ;print SUBSTRING STR 5 10
+    ;halt
+
+---FILLER
+
+When creating fixed-format files, it can be necessary to pad out to a
+specific number of characters.  This function returns a string of spaces
+a given number of characters long.  This same thing can be done with 
+the "insert/dup" REBOL function.
+
+    REBOL [
+        title: "FILLER function"
+    ] 
+
+    FILLER: func [
+        "Return a string of a given number of spaces"
+        SPACE-COUNT [integer!]
+        /local FILLR 
+    ] [
+        FILLR: copy ""
+        loop SPACE-COUNT [
+            append FILLR " "
+        ]
+        return FILLR
+    ]
+
+    ;; Uncomment to test
+    ;print rejoin ["'" FILLER 10 "'"] 
+    ;halt
+
+---ZEROFILL
+
+This is a procedure written for converting a number, which  
+could be a decimal number, currency, string with commas and 
+dollar signs, and so on, into an output string which is just 
+the digits, padded on the left with leading zeros out to a   
+specified length.  It was written as an aid in creating a    
+fixed-format text file.                                      
+The procedure works in a way that might not be immediatedly  
+obvious.  It uses the trim function on a copy of the input   
+string to filter OUT everything but digits.  The result of   
+this first trimming will be any invalid characters in the    
+input string.  Then it trims the real input string to filter 
+out all the non-numeric characters captured in the first     
+trim.  After the procedure gets a trimmed string of digits   
+only, it reverses it and adds enough zeros on the right to   
+pad it out to the desired length.  Then it reverses the      
+result again to get the extra zeros on the left and returns  
+this final result to the caller.                             
+
+    REBOL [
+        title: "ZEROFILL function"
+    ] 
+
+    ZEROFILL: func [
+        "Convert number to string, pad with leading zeros"
+        INPUT-STRING
+        FINAL-LENGTH
+        /local ALL-DIGITS 
+               LENGTH-OF-ALL-DIGITS
+               NUMER-OF-ZEROS-TO-ADD
+               REVERSED-DIGITS 
+               FINAL-PADDED-NUMBER
+    ] [
+        ALL-DIGITS: copy ""
+        ALL-DIGITS: trim/with to-string INPUT-STRING trim/with 
+            copy to-string INPUT-STRING "0123456789"
+        LENGTH-OF-ALL-DIGITS: length? ALL-DIGITS
+        if (LENGTH-OF-ALL-DIGITS <= FINAL-LENGTH) [
+            NUMBER-OF-ZEROS-TO-ADD: (FINAL-LENGTH - LENGTH-OF-ALL-DIGITS)
+            REVERSED-DIGITS: copy ""
+            REVERSED-DIGITS: reverse ALL-DIGITS    
+            loop NUMBER-OF-ZEROS-TO-ADD [
+                append REVERSED-DIGITS "0"
+            ]
+            FINAL-PADDED-NUMBER: copy ""
+            FINAL-PADDED-NUMBER: copy/part reverse REVERSED-DIGITS FINAL-LENGTH
+        ]
+        return FINAL-PADDED-NUMBER
+    ]
+
+    ;; Uncomment to test
+    ;print rejoin ["'" ZEROFILL $123.45 8 "'"]
+    ;print rejoin ["'" ZEROFILL 345678  8 "'"]
+    ;print rejoin ["'" ZEROFILL "123,456" 8 "'"]
+    ;halt       
+
+---INSERT-DECIMAL
+
+This is a procedure written to create a displayable decimal number.      
+It seems that, in REBOL, in certain situations, a decimal number gets    
+displayed in "scientific notation" rather than in a human-friendly way   
+of a bunch of digits and a decimal point.  This procedure takes a string 
+of any characters (normally one would use digits), plus a number that    
+represents a desired number of decimal places, and inserts a decimal     
+point into the string such that it shows the desired number of decimal   
+places.  So, if you supplied "123456789" and a three (3), you would      
+get "123456.789" as a result.                                            
+
+    REBOL [
+        title: "INSERT-DECIMAL function"
+    ] 
+
+    INSERT-DECIMAL: func [
+        "Insert a decimal point into a string of digits"
+        INPUT-STRING
+        DECIMAL-PLACES
+        /local FINAL-DECIMAL-NUMBER
+               NUMBER-OF-ZEROS-TO-ADD
+               REVERSED-INPUT
+               LENGTH-OF-INPUT
+    ] [
+        REVERSED-INPUT: copy ""
+        REVERSED-INPUT: reverse to-string INPUT-STRING
+        LENGTH-OF-INPUT: length? REVERSED-INPUT
+        if (DECIMAL-PLACES > LENGTH-OF-INPUT) [
+            NUMBER-OF-ZEROS-TO-ADD: (DECIMAL-PLACES - LENGTH-OF-INPUT)
+            loop NUMBER-OF-ZEROS-TO-ADD [
+                append REVERSED-INPUT "0"
+            ]
+        ]
+    ;;  -- REVERSED-INPUT now is long enough for inserting a decimal point
+        REVERSED-INPUT: head REVERSED-INPUT
+        REVERSED-INPUT: skip REVERSED-INPUT DECIMAL-PLACES
+        insert REVERSED-INPUT "."
+        REVERSED-INPUT: head REVERSED-INPUT
+        FINAL-DECIMAL-NUMBER: reverse REVERSED-INPUT
+    ]    
+
+    ;; Uncomment to test
+    ;print [INSERT-DECIMAL 12345678 2]
+    ;print [INSERT-DECIMAL "12345678" 2]
+    ;halt
+
+---SPACEFILL
+
+This is a function to take a string, and a length, and pad the    
+string with trailing spaces.  It also, as a byproduct, trims off  
+leading spaces based on the idea that this opertion would be      
+the most commonly-wanted.     
+
+    REBOL [
+        title: "SPACEFILL function"
+    ] 
+
+    SPACEFILL: func [
+        "Left justify a string, pad with spaces to specified length"
+        INPUT-STRING
+        FINAL-LENGTH
+        /local TRIMMED-STRING
+               LENGTH-OF-TRIMMED-STRING
+               NUMBER-OF-SPACES-TO-ADD
+               FINAL-PADDED-STRING
+    ] [
+        TRIMMED-STRING: copy ""
+        TRIMMED-STRING: trim INPUT-STRING
+        LENGTH-OF-TRIMMED-STRING: length? TRIMMED-STRING
+        either (LENGTH-OF-TRIMMED-STRING < FINAL-LENGTH) [
+            NUMBER-OF-SPACES-TO-ADD: (FINAL-LENGTH - LENGTH-OF-TRIMMED-STRING)
+            FINAL-PADDED-STRING: copy TRIMMED-STRING
+            loop NUMBER-OF-SPACES-TO-ADD [
+                append FINAL-PADDED-STRING " "
+            ]
+        ] [
+            FINAL-PADDED-STRING: COPY ""
+            FINAL-PADDED-STRING: copy/part TRIMMED-STRING FINAL-LENGTH
+        ]
+    ]
+
+    ;; Uncomment to test
+    ;print rejoin [{'} SPACEFILL "   ABCD1234 " 10 {'}]
+    ;halt  
+    
+---SPACEFILL-LEFT 
+
+This function is similar to SPACEFILL except that it adds         
+spaces to the left and returns a string of a specified size.          
+This procedure could be used to, in effect, right-justify a number     
+for printing.  Convert the number to a string and then run it through  
+this function to get it right-justified inside a string of a specified 
+length.   
+
+    REBOL [
+        title: "SPACEFILL-LEFT function"
+    ] 
+
+    SPACEFILL-LEFT: func [
+        "Right justify a string, pad with spaces to specified length"
+        INPUT-STRING
+        FINAL-LENGTH
+        /local TRIMMED-STRING
+               LENGTH-OF-TRIMMED-STRING
+               NUMBER-OF-SPACES-TO-ADD
+               FINAL-PADDED-STRING
+    ] [
+        TRIMMED-STRING: copy ""
+        TRIMMED-STRING: trim INPUT-STRING
+        LENGTH-OF-TRIMMED-STRING: length? TRIMMED-STRING
+        either (LENGTH-OF-TRIMMED-STRING < FINAL-LENGTH) [
+            NUMBER-OF-SPACES-TO-ADD: (FINAL-LENGTH - LENGTH-OF-TRIMMED-STRING)
+            FINAL-PADDED-STRING: copy TRIMMED-STRING
+            loop NUMBER-OF-SPACES-TO-ADD [
+                insert head FINAL-PADDED-STRING " "
+            ]
+        ] [
+    ;;      -- Do same as SPACEFILL for now, maybe cut off left end later
+            FINAL-PADDED-STRING: COPY ""
+            FINAL-PADDED-STRING: copy/part TRIMMED-STRING FINAL-LENGTH
+        ]
+    ]
+
+    ;; Uncomment to test
+    ;print rejoin [{'} SPACEFILL-LEFT "   ABCD1234 " 10 {'}]
+    ;halt     
+
+---EDIT-X
+
+This is a function for a COBOL-like editing of a data item           
+with an "X" picture.                                                 
+Call the function with a string and a mask, and the function         
+will return a string that has the format of the mask with            
+any character "X" replaced by a character of the input string.       
+For example:                                                         
+PHONE: "9525631001"                                                     
+EDIT-X PHONE "XXX-XXX-XXXX"                                         
+and the result will be "952-563-1001".                                
+Note the line of code that compares the character from the mask to   
+the letter X.  In REBOL, "X" is a string and #"X" is a character,    
+and they are not the same.                                                                                
+    REBOL [
+        title: "EDIT-X function"
+    ] 
+
+    EDIT-X: func ["COBOL-like edit of string using mask"
+        XSTRING XMASK   
+        /local 
+            XINPUT   ; trimmed input work area
+            XINLGH   ; length of trimmed input
+            XINSUB   ; subscript for trimmed input
+            XOUTPUT  ; final output area, returned to caller
+            XMASKLGH ; length of edit mask from caller
+            XMASKSUB ; subscript for mask   
+        ] [
+        XINPUT: trim XSTRING
+        XINLGH: length? XINPUT
+        XMASKLGH: length? XMASK
+        XINSUB: 1
+        XMASKSUB: 1
+        XOUTPUT: copy ""
+        if equal? XINPUT "" [
+            return XOUTPUT
+        ]
+        while [<= XMASKSUB XMASKLGH] [
+            either (XMASK/:XMASKSUB = #"X") [  ;; potential "gotcha" 
+                if (XINSUB <= XINLGH) [
+                    append XOUTPUT XINPUT/:XINSUB
+                    XINSUB: XINSUB + 1
+                ]
+            ] [
+                append XOUTPUT XMASK/:XMASKSUB
+            ]
+            XMASKSUB: XMASKSUB + 1 
+        ]
+        return XOUTPUT 
+    ]
+
+    ;; Uncomment to test
+    ;PHONE: "9525631001"
+    ;print [EDIT-X PHONE "XXX-XXX-XXXX"]
+    ;halt
+        
+===Some brute-force attacks
+
+There are so many situations one might run up against that maybe there
+are no good examples for helping other than some examples that are
+simple enough that they show the concept.  So here are some simple 
+examples of reading fixed-format or delimited files, taking them apart,
+and putting them back together.
+
+---A fixed-format brute-force attack
+
+This example takes apart a fixed-format file and puts it back together
+as a CSV file.
+
+    REBOL [
+        title: "Fixed-format brute-force"
+    ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Take apart a fixed-format file, show the parts, string them back together.]
+    ;; [---------------------------------------------------------------------------]
+    
+    TEST-FIXED-FILE-ID: %test-fixedformat.txt
+
+    INPUT-FILE: read/lines TEST-FIXED-FILE-ID
+
+    LINE-COUNT: 0
+
+    foreach INPUT-LINE INPUT-FILE [
+        LINE-COUNT: LINE-COUNT + 1
+        print ["Line " LINE-COUNT]
+        FIELD-1: copy ""
+        FIELD-2: copy ""
+        FIELD-3: copy ""
+        FIELD-4: copy ""
+        FIELD-5: copy ""
+        FIELD-6: copy ""
+        FIELD-7: copy ""
+        FIELD-1: copy/part at INPUT-LINE 1 10
+        FIELD-2: copy/part at INPUT-LINE 11 20
+        FIELD-3: copy/part at INPUT-LINE 31 10
+        FIELD-4: copy/part at INPUT-LINE 41 11
+        FIELD-5: copy/part at INPUT-LINE 52 7
+        FIELD-6: copy/part at INPUT-LINE 59 2
+        FIELD-7: copy/part at INPUT-LINE 61 2 
+        print rejoin ["FIELD-1 ='" FIELD-1 "' of type " type? FIELD-1]
+        print rejoin ["FIELD-2 ='" FIELD-2 "' of type " type? FIELD-2]
+        print rejoin ["FIELD-3 ='" FIELD-3 "' of type " type? FIELD-3]
+        print rejoin ["FIELD-4 ='" FIELD-4 "' of type " type? FIELD-4]
+        print rejoin ["FIELD-5 ='" FIELD-5 "' of type " type? FIELD-5]
+        print rejoin ["FIELD-6 ='" FIELD-6 "' of type " type? FIELD-6]
+        print rejoin ["FIELD-7 ='" FIELD-7 "' of type " type? FIELD-7]
+        FIELD-4A: to-date FIELD-4
+        FIELD-7A: to-integer FIELD-7
+        print rejoin ["FIELD-4A ='" FIELD-4A "' of type " type? FIELD-4A]
+        print rejoin ["FIELD-7A ='" FIELD-7A "' of type " type? FIELD-7A]
+        OUTPUT-RECORD: copy ""
+        append OUTPUT-RECORD rejoin [
+            trim FIELD-1 ","
+            trim FIELD-2 ","
+            FIELD-3 ","
+            FIELD-4A ","
+            FIELD-5 ","
+            FIELD-6 ","
+            FIELD-7A ;; No comma after last item 
+            ;newline ; don't need newline if we are just going to print it
+        ]
+        print OUTPUT-RECORD
+        print "-----------------------------------" 
+    ]
+
+    halt
+
+Here is the result: 
+
+    Line  1
+    FIELD-1 ='Jordan    ' of type string
+    FIELD-2 ='1801 Main St        ' of type string
+    FIELD-3 ='6129261001' of type string
+    FIELD-4 ='01-JAN-2001' of type string
+    FIELD-5 ='0123456' of type string
+    FIELD-6 ='X1' of type string
+    FIELD-7 ='21' of type string
+    FIELD-4A ='1-Jan-2001' of type date
+    FIELD-7A ='21' of type integer
+    Jordan,1801 Main St,6129261001,1-Jan-2001,0123456,X1,21,
+    -----------------------------------
+    Line  2
+    FIELD-1 ='James     ' of type string
+    FIELD-2 ='1801 Main St        ' of type string
+    FIELD-3 ='6129261002' of type string
+    FIELD-4 ='02-FEB-2002' of type string
+    FIELD-5 ='0234567' of type string
+    FIELD-6 ='X1' of type string
+    FIELD-7 ='22' of type string
+    FIELD-4A ='2-Feb-2002' of type date
+    FIELD-7A ='22' of type integer
+    James,1801 Main St,6129261002,2-Feb-2002,0234567,X1,22,
+    -----------------------------------
+    Line  3
+    FIELD-1 ='Jeremy    ' of type string
+    FIELD-2 ='1801 Main St        ' of type string
+    FIELD-3 ='6129261003' of type string
+    FIELD-4 ='03-MAR-2004' of type string
+    FIELD-5 ='0345678' of type string
+    FIELD-6 ='X1' of type string
+    FIELD-7 ='23' of type string
+    FIELD-4A ='3-Mar-2004' of type date
+    FIELD-7A ='23' of type integer
+    Jeremy,1801 Main St,6129261003,3-Mar-2004,0345678,X1,23,
+    -----------------------------------
+    >>
+
+Notice a couple points about the result.
+
+When you initially get the individual data items, all you can do is copy
+them out of the data record based on position and length.  They all come
+out as strings.  If you want to do anything non-stringy with them, like
+some calculations, you will have to convert the strings to REBOL types.
+If the data is valid, the conversion should work.
+
+If any number in the data is supposed to have a decimal point, as in a
+currency amount, the only way that can be known is by the program knowing
+it.  There is nothing about the data itself that indicates what the
+number represents.  That shows a big advantage of REBOL.  The "type" of
+a data item can be known from its format. 
+
+---A CSV brute-force attack
+
+Here is an example that takes apart a CSV file and puts it back together
+in a fixed format.  
+ 
+    REBOL [
+        title: "CSV brute-force"
+    ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Take apart a CSV file, show the parts, string them back together.         ]
+    ;; [---------------------------------------------------------------------------]
+
+    TEST-CSV-FILE-ID: %test-csvformat.csv
+
+    INPUT-FILE: read/lines TEST-CSV-FILE-ID ;; bring whole file into memory
+    remove INPUT-FILE ;; delete first line which is the headings
+
+    LINE-COUNT: 0
+
+    foreach INPUT-LINE INPUT-FILE [
+        LINE-COUNT: LINE-COUNT + 1
+        print ["Line " LINE-COUNT] 
+        PARTS: copy []
+        PARTS: parse/all INPUT-LINE ","
+        FIELD-1: copy ""
+        FIELD-2: copy ""
+        FIELD-3: copy ""
+        FIELD-4: copy ""
+        FIELD-5: copy ""
+        FIELD-6: copy ""
+        FIELD-7: copy ""
+        FIELD-1: copy PARTS/1    
+        FIELD-2: copy PARTS/2    
+        FIELD-3: copy PARTS/3    
+        FIELD-4: copy PARTS/4    
+        FIELD-5: copy PARTS/5    
+        FIELD-6: copy PARTS/6    
+        FIELD-7: copy PARTS/7
+        print rejoin ["FIELD-1 ='" FIELD-1 "' of type " type? FIELD-1]
+        print rejoin ["FIELD-2 ='" FIELD-2 "' of type " type? FIELD-2]
+        print rejoin ["FIELD-3 ='" FIELD-3 "' of type " type? FIELD-3]
+        print rejoin ["FIELD-4 ='" FIELD-4 "' of type " type? FIELD-4]
+        print rejoin ["FIELD-5 ='" FIELD-5 "' of type " type? FIELD-5]
+        print rejoin ["FIELD-6 ='" FIELD-6 "' of type " type? FIELD-6]
+        print rejoin ["FIELD-7 ='" FIELD-7 "' of type " type? FIELD-7]
+        FIELD-4A: to-date FIELD-4
+        FIELD-7A: to-integer FIELD-7
+        print rejoin ["FIELD-4A ='" FIELD-4A "' of type " type? FIELD-4A]
+        print rejoin ["FIELD-7A ='" FIELD-7A "' of type " type? FIELD-7A]
+        OUTPUT-RECORD: copy ""
+        append OUTPUT-RECORD rejoin [
+            FIELD-1 
+            FIELD-2 
+            FIELD-3 
+            FIELD-4A 
+            FIELD-5 
+            FIELD-6 
+            FIELD-7A 
+            ;newline ; don't need newline if we are just going to print it
+        ]
+        print OUTPUT-RECORD
+        print "-----------------------------------"     
+    ]
+
+    halt
+
+Here is the result:
+
+    Line  1
+    FIELD-1 ='Jordan' of type string
+    FIELD-2 ='1801 Main St' of type string
+    FIELD-3 ='612-926-1001' of type string
+    FIELD-4 ='01-JAN-2001' of type string
+    FIELD-5 ='1234.56' of type string
+    FIELD-6 ='X1' of type string
+    FIELD-7 ='21' of type string
+    FIELD-4A ='1-Jan-2001' of type date
+    FIELD-7A ='21' of type integer
+    Jordan1801 Main St612-926-10011-Jan-20011234.56X121
+    -----------------------------------
+    Line  2
+    FIELD-1 ='James' of type string
+    FIELD-2 ='1802 Main St' of type string
+    FIELD-3 ='612-926-1002' of type string
+    FIELD-4 ='02-FEB-2002' of type string
+    FIELD-5 ='2345.67' of type string
+    FIELD-6 ='X2' of type string
+    FIELD-7 ='22' of type string
+    FIELD-4A ='2-Feb-2002' of type date
+    FIELD-7A ='22' of type integer
+    James1802 Main St612-926-10022-Feb-20022345.67X222
+    -----------------------------------
+    Line  3
+    FIELD-1 ='Jeremy' of type string
+    FIELD-2 ='1803 Main St' of type string
+    FIELD-3 ='612-926-1003' of type string
+    FIELD-4 ='03-MAR-2004' of type string
+    FIELD-5 ='3456.78' of type string
+    FIELD-6 ='X3' of type string
+    FIELD-7 ='23' of type string
+    FIELD-4A ='3-Mar-2004' of type date
+    FIELD-7A ='23' of type integer
+    Jeremy1803 Main St612-926-10033-Mar-20043456.78X323
+    -----------------------------------
+    >>
+
+Note some points about the above result.
+
+It is necessary, and easy, to remove that first line of column headings.
+How would you know that there is a line of headings to remove?  You would
+have to look at the file visually.  Remember, as noted at the beginning,
+we are assuming that we have files with that heading line because that is
+a common scenario.
+
+The "parse" function divides up the input line into strings, based on the
+commas.  If you want any of those sub-strings to be recognized as some other
+type of data, you will have to apply the appropriate conversions.
+
+You can't just string the fields back together if you want a fixed-format
+record.  The sub-strings are as long as they are, and if you want them a
+specific length, you will have to pad them out.  Some of our home-grown
+functions above will help with that.  
+                                         
+In both examples above, note how we did not have to "define" the variables
+called FIELD-1, OUTPUT-RECORD, etc.  They are defined when they are used.
+This helps make REBOL coding a bit faster.  That being said, there is no
+reason you can't "define" variables by listing them at the beginning of
+your program with some initial values, or "none."  It just is not necessary.
+
+===A little REBOL-ish help
+
+Now we get to have a little mind-bending fun with REBOL.
+This takes advantage of some of REBOL's features in the area of
+code being data and data being code.
+
+In REBOL code, the word followed by the colon is not really an
+assignment statement where a variable gets a value, it is a "set-word"
+which seems to be sort of a function which creates the indicated word
+and makes it refer to a value.  A set-word can be in data, and the
+data can be executed, and a word can come into being.  In other words,
+a REBOL script can write part of itself while it is running.
+
+In REBOL, it is possible to encapsulate code and data into an "object."
+Then, it is possible to make instances of that object with different
+names, so you can have several of them in operation at the same time.
+Not only that, with the "make" function, a REBOL script can create
+objects at run time.
+
+How might we make use if those features?
+
+---A CSV file helper
+
+In a CSV file of the kind we are concerned with, the first line contains
+column headings.  We never process the first line as data, because it
+is not, it is just the headings.  What if we could use those column
+headings to create words at run time, and then assign to those words
+the values of the data in the other lines of the file?  We can.
+
+The code module below, which we will use in a demo later, creates an
+object called "CSV."  This object contains code and data that will
+read a CSV file, stip off the first line, and make words out of all the
+headings.  It also provides procedures to read a line of data out of
+the file, take it apart based on the commas, and assign the parsed
+values to the words from the column headings.  The procedure that
+reads a line of data is written in a way such that it returns a flag
+when there area no more records, so it is possible to make a loop
+to read through the file.  As a final feature, because this is an 
+object, you can make instances of it to have several CSV files open
+at the same time. The code at the end of the module that makes an
+html table out of data from the file is not used in demos here.
+
+    REBOL [
+        Title: "CSV file object"
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is a module for making it easy to read values in a csv file by       ]
+    ;; [ creating words and values from a csv file.                                ]
+    ;; [ to be more specific, we start with a csv file that has a line of          ]
+    ;; [ headings as the first line.  Each word in the line of headings            ]
+    ;; [ is going to be the name of the corresponding item in each following       ]
+    ;; [ record of the csv file.  For example:                                     ]
+    ;; [     name,address,birthdate                                                ]
+    ;; [     "John Smith","1800 W Old Shakopee Rd",01-JAN-2000                     ]
+    ;; [     "Jane Smith","2100 1ST Ave",01-FEB-1995                               ]
+    ;; [     "Jared Smith",3500 2ND St",01-MAR-1998                                ]
+    ;; [ The above text file is like a little data file.                           ]
+    ;; [ We will "open" the file by performing some function, and then we          ]
+    ;; [ will "read" "records" from the file until the end.                        ]
+    ;; [ Every time we read a record, the words 'name, 'address, 'birthdate        ]
+    ;; [ will have, as values, the values from the record we just read.            ]
+    ;; [ In other words, when we "read" the first record, the following            ]
+    ;; [ situation will exist:                                                     ]
+    ;; [     RECORD/name = "John Smith"                                            ]
+    ;; [     RECORD/address = "1800 W Old Shakopee Rd"                             ]
+    ;; [     RECORD/birtdhdate = 01-JAN-2000                                       ]
+    ;; [ Then, when read the next record, those same words of 'name, 'address,     ]
+    ;; [ and 'birthdate will refer to the values from the second record.           ]
+    ;; [ And so on to the end of the file.                                         ]
+    ;; [ Then, when we try to read beyond the end, we will get an indicator        ]
+    ;; [ that we have reached the end of the file.                                 ]
+    ;; [                                                                           ]
+    ;; [ As an additional service, we want to provide the ability to rewrite       ]
+    ;; [ a csv file after we make changes.  So, when we "open" a file, we also     ]
+    ;; [ will copy the headings to an output area just in case we want to          ]
+    ;; [ rewrite the file.  Then, we will provide a "write" procedure that will    ]
+    ;; [ make a csv record out of the current data and append it to the output     ]
+    ;; [ area.  A "close" procedure will write the output area to disk.            ] 
+    ;; [---------------------------------------------------------------------------]
+
+    CSV: make object! [
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ These are the data items used to get the csv file into memeory,           ]
+    ;; [ pick off the first record of column headings, and so on.                  ]
+    ;; [---------------------------------------------------------------------------]
+
+        FILE-ID: none       ;; Name of the file, will come from caller 
+        FILE-LINES: none    ;; The entire contents of the file
+        HEADINGS: none      ;; Words from the first line as strings
+        HEADWORDS: none     ;; The words from the first line as words
+        WORDCOUNT: 0        ;; Number of heading words 
+        RECORD: none        ;; The current data record object, in the READ procedure
+        VALUES: none        ;; The parsed values from a single data line
+        EOF: false          ;; End-of-file flag when we "read" beyond last "record"
+        LENGTH: 0           ;; Number of lines in the file, including heading line
+        COUNTER: 0          ;; Record counter as we move through the file
+        VAL-COUNTER: 0      ;; For stepping through values in one record
+        OUTPUT-LINES: none  ;; Copy of the input file, with modifications 
+        OUTPUT-FILE: none   ;; Name of output file
+        OUTPUT-REC: none    ;; One output record
+        COMMACOUNT: 0       ;; Used to NOT put comma after last field of record 
+        IN-FIELD: false     ;; Used in comma-replacement operation
+        COMMA-MARKER: "%C%" ;; Will replace comma temporarily before parsing
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ We will need a function to clear the above items so that a calling        ]
+    ;; [ program can read more than one file.                                      ]
+    ;; [---------------------------------------------------------------------------]
+
+        CLEAR-WS: does [
+            FILE-ID: none     
+            FILE-LINES: none    
+            HEADINGS: none 
+            HEADWORDS: none    
+            WORDCOUNT: 0 
+            RECORD: none   
+            VALUES: none   
+            EOF: false     
+            LENGTH: 0      
+            COUNTER: 0     
+            VAL-COUNTER: 0 
+            OUTPUT-LINES: copy ""
+            OUTPUT-FILE: none
+            OUTPUT-REC: none 
+            COMMACOUNT: 0 
+            IN-FIELD: false
+        ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Procedure to "open" the file.  What does that mean?                       ]
+    ;; [ Read the entire file into memory.  Parse the first line into a block      ]
+    ;; [ of words.  Make a note of the number of lines in the file.                ]
+    ;; [ Set up a counter so we can pick our way through the file and stop         ]
+    ;; [ when we reach the last record.                                            ]
+    ;; [ Since this module is designed for use inside another program,             ]
+    ;; [ this function normally will be called with a file name as argument.       ]
+    ;; [---------------------------------------------------------------------------]
+
+        CSVOPEN: func [
+            FILE-TO-OPEN      
+        ] [
+            CLEAR-WS
+            FILE-ID: FILE-TO-OPEN
+            FILE-LINES: read/lines FILE-ID
+            LENGTH: length? FILE-LINES
+            append OUTPUT-LINES first FILE-LINES   ;; preparation for possible writing 
+            append OUTPUT-LINES newline
+            HEADINGS: parse/all first FILE-LINES ","
+            HEADWORDS: copy []
+            foreach HEADING HEADINGS [  ;; put all words from line 1 into a block
+                if not-equal? "" trim HEADING [
+                    append HEADWORDS to-word trim HEADING
+                    WORDCOUNT: WORDCOUNT + 1
+                ] 
+            ]
+            COUNTER: 1 
+            EOF: false
+            return EOF 
+        ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ The (optional) procedure to "close" the file.  What does that mean?       ]
+    ;; [ To mimic the idea of opening a file I-O, meaning that we can rewrite      ]
+    ;; [ a record after we have read it, we can write the data we have read        ]
+    ;; [ into an output area, which will be a copy of the input file (or at        ]
+    ;; [ least those records we have chosen to write).  The "close" procedure      ]
+    ;; [ will write that file to disk.  You have to specify a file name,           ]
+    ;; [ which may be the same (which will be like "saving" the file) or may       ]
+    ;; [ be different (which will be like "saving as."                             ]
+    ;; [---------------------------------------------------------------------------]
+
+        CSVCLOSE: func [
+            FILE-TO-CLOSE
+        ] [ 
+            OUTPUT-FILE: FILE-TO-CLOSE
+            write/lines OUTPUT-FILE OUTPUT-LINES
+        ] 
+ 
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Procedure to "read" the file.  What does this mean?                       ]
+    ;; [ Obtain the next line.  This is determined by "picking" based on the       ]
+    ;; [ record counter.  If the counter becomes bigger than the file size,        ]
+    ;; [ that means we have reached the end of the file.                           ]
+    ;; [ Parse the line into a block of strings.                                   ]
+    ;; [ For each word in the block of column headings, set that word to the       ]
+    ;; [ corresponding item parsed from the data.                                  ]
+    ;; [ We have to be sure to return the value of EOF so any calling              ]
+    ;; [ procedure can use EOF to decide when to quit processing.                  ]
+    ;; [ There is a special little thing we do with each line before parsing it.   ]
+    ;; [ It is possible that the data could contain commas.  It is customary       ]
+    ;; [ that in such situations the field is enclosed in quotes.                  ]
+    ;; [ We will assume that our data follows this custom, and take steps to       ]
+    ;; [ to handle the possibility of commas in the data.                          ]
+    ;; [ Before we parse a line on commas, we will go through the line one         ]
+    ;; [ character at a time.  When we hit the first quote, we will assume that    ]
+    ;; [ we are entering a fields.  From then on, we will replace commas with      ]
+    ;; [ special place holders.  When we hit the next quote, we will assume        ]
+    ;; [ we have left the field and we will stop replacing commas.                 ]
+    ;; [ The next quote takes us into a field, the next one out, next in, etc.     ]
+    ;; [ When we are done replacing embedded commas, we parse the line on          ]
+    ;; [ commas.  Then, as we load each field, for each string field we check      ]
+    ;; [ for our place holder and replace it with a comma.                         ]
+    ;; [ As for getting the data out to the caller, it is not quite a simple as    ]
+    ;; [ setting words to values.  We will make an object, called RECORD,          ]
+    ;; [ and load it up with repetitions of:                                       ]
+    ;; [     <word><colon> <parsed-value>                                          ]
+    ;; [ and the caller will refer to CSV/RECORD/<word>                            ]
+    ;; [---------------------------------------------------------------------------]
+
+        REPLACE-EMBEDDED-COMMAS: does [
+            IN-FIELD: false
+            foreach CHARACTER RECORD [
+                either equal? CHARACTER {"} [
+                    either IN-FIELD [
+                        IN-FIELD: false
+                    ] [
+                        IN-FIELD: true
+                    ]
+                ] [
+                    if IN-FIELD [
+                        replace CHARACTER "," COMMA-MARKER
+                    ] 
+                ]
+            ]
+        ]
+
+        CSVREAD: does [
+            COUNTER: COUNTER + 1
+            if (COUNTER > LENGTH) [
+                EOF: true
+                return EOF 
+            ]
+            RECORD: pick FILE-LINES COUNTER
+            REPLACE-EMBEDDED-COMMAS
+            VALUES: parse/all RECORD ","
+            VAL-COUNTER: 0
+            RECORD: make object! [] ;; make an empty object
+            foreach WORD HEADWORDS [
+                VAL-COUNTER: VAL-COUNTER + 1 ;; point to next value
+                TEMP-VAL: pick VALUES VAL-COUNTER ;; get next value
+                if not TEMP-VAL [   ;; don't want to crash if no value found
+                    TEMP-VAL: copy ""
+                ]
+                if equal? string! type? TEMP-VAL [ ;; put back commas we removed
+                    replace/all TEMP-VAL COMMA-MARKER ","
+                ] 
+                RECORD: make RECORD compose [ ;; re-make RECORD adding to previous
+                    (to-set-word WORD) TEMP-VAL
+                ]
+            ]
+            return EOF 
+        ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Procedure to "write" the file.  What does this mean?                      ]
+    ;; [ We are not really writing the file.  We are formatting the current data   ]
+    ;; [ into a csv record and appending it to an output area.                     ]
+    ;; [ If we do a "write" procedure for every "read" procedure, we will,         ]
+    ;; [ in effect, copy the input file.  If we read the input, and then maybe     ]
+    ;; [ or maybe not write to the output file, we will, in effect, filter the     ]
+    ;; [ input file.  This is not quite like the COBOL operation of opening        ]
+    ;; [ a file for input and output.  In COBOL, you could read a record, and      ]
+    ;; [ then maybe or maybe not rewrite it, and at the end, you would have the    ]
+    ;; [ same number of records in the file and maybe some of them would be        ]
+    ;; [ altered.  Here, if you don't write the file, you don't get a record       ]
+    ;; [ into the file, and when you close it you either write over the input      ]
+    ;; [ file if you use the same name, or make a copy if you close under a        ]
+    ;; [ different name.                                                           ]
+    ;; [ Note that performing this procedure makes no sense if you don't first     ]
+    ;; [ perform READ to read a record.                                            ]
+    ;; [---------------------------------------------------------------------------]
+
+        CSVWRITE: does [
+            OUTPUT-REC: copy ""
+            COMMACOUNT: 0 
+            foreach WORD HEADWORDS [
+                append OUTPUT-REC mold RECORD/:WORD ;; mold adds quotes
+                COMMACOUNT: COMMACOUNT + 1              ;; in case value has commas
+                if (COMMACOUNT < WORDCOUNT) [
+                    append OUTPUT-REC ","
+                ]    
+            ]
+            append OUTPUT-LINES OUTPUT-REC
+            append OUTPUT-LINES newline
+        ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ These are helper functions for reporting selected columns to              ]
+    ;; [ to an html file.                                                          ]
+    ;; [---------------------------------------------------------------------------]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This function accepts a block of words, which usually are the column      ]
+    ;; [ names from the file but need not be.  It converts each word to a string   ]
+    ;; [ and emits the beginning of an html table with a row of table headers      ]
+    ;; [ consisting of the supplied words.                                         ]
+    ;; [---------------------------------------------------------------------------]
+
+        REPORT-HTML: ""
+
+        REPORT-HEAD: func [
+            REPORT-COL-NAMES
+        ] [
+            REPORT-HTML: copy ""
+            append REPORT-HTML rejoin [
+                {<table width="100%" border="1">}
+                newline
+                "<tr>"
+                newline
+            ]
+            foreach REPORT-COL REPORT-COL-NAMES [
+                append REPORT-HTML rejoin [
+                    "<th>"
+                    to-string REPORT-COL
+                    "</th>"
+                    newline
+                ]
+            ]
+            append REPORT-HTML rejoin [
+                "</tr>"
+                newline
+            ]
+        ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This function must be performed to close the table that we use for        ]
+    ;; [ the report.  Note that the html string we are creating is only a table    ]
+    ;; [ and not a full html page.  This is by design.                             ]
+    ;; [---------------------------------------------------------------------------]
+
+        REPORT-FOOT: does [
+            append REPORT-HTML rejoin [
+                "</table>"
+                newline
+            ]
+        ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This function accepts a block of words which MUST BE words from the file. ]
+    ;; [ It puts the values of those words into td elements and appends them to    ]
+    ;; [ the html string.                                                          ]
+    ;; [---------------------------------------------------------------------------]
+
+        REPORT-LINE: func [
+            REPORT-COL-NAMES
+        ] [
+            append REPORT-HTML rejoin [
+                "<tr>"
+                newline
+            ]
+            foreach REPORT-COL REPORT-COL-NAMES [
+                append REPORT-HTML rejoin [
+                    "<td>"
+                    RECORD/:REPORT-COL
+                    "</td>"
+                    newline
+                ]
+            ]    
+            append REPORT-HTML rejoin [
+                "</tr>"
+                newline
+            ]
+        ]
+    ]
+
+What follows next is a little demo program to show the power of the CSV
+object.  To make the demo syntactically correct as it is now, you will
+have to save the above module as "csvobj.r" on your computer.  Then run
+this demo:
+
+    REBOL [
+        title: "CSV object demo"
+    ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Show how to use the CSV object.                                           ]
+    ;; [---------------------------------------------------------------------------]
+
+    do %csvobj.r
+
+    TEST-CSV-FILE-ID: %test-csvformat.csv
+    
+    CSV1: make CSV []              ;; make an instance of the CSV object
+    CSV1/CSVOPEN TEST-CSV-FILE-ID  ;; read the file, make column heading words
+
+    CSV1/CSVREAD  ;; read first record to get set up for 'until' loop  
+
+    until [  ;; do this loop until last item in it becomes true
+        probe CSV1/RECORD
+        print rejoin ["NAME ='" CSV1/RECORD/NAME "' of type " type? CSV1/RECORD/NAME]
+        print rejoin ["ADDRESS ='" CSV1/RECORD/ADDRESS "' of type " type? CSV1/RECORD/ADDRESS]
+        print rejoin ["PHONE ='" CSV1/RECORD/PHONE "' of type " type? CSV1/RECORD/PHONE]
+        print rejoin ["DATE ='" CSV1/RECORD/DATE "' of type " type? CSV1/RECORD/DATE]
+        print rejoin ["AMT ='" CSV1/RECORD/AMT "' of type " type? CSV1/RECORD/AMT]
+        print rejoin ["CODE ='" CSV1/RECORD/CODE "' of type " type? CSV1/RECORD/CODE]
+        print rejoin ["COUNT ='" CSV1/RECORD/COUNT "' of type " type? CSV1/RECORD/COUNT]
+        print "-------------------------------------------"
+        CSV1/CSVREAD  ;; reading next record at end of loop returns EOF flag 
+    ]
+
+    halt
+
+Notice how easy it is to get your hands on the data from the file.  
+Although, all items are in string format.  We can leave it as "an exercise
+for the reader," as they say in math classes, to see if it is possible to get
+the words from the heading line created with the correct data types.
+
+Here is the result of running the above demo:
+
+    make object! [
+        NAME: "Jordan"
+        ADDRESS: "1801 Main St"
+        PHONE: "612-926-1001"
+        DATE: "01-JAN-2001"
+        AMT: "1234.56"
+        CODE: "X1"
+        COUNT: "21"
+    ]
+    NAME ='Jordan' of type string
+    ADDRESS ='1801 Main St' of type string
+    PHONE ='612-926-1001' of type string
+    DATE ='01-JAN-2001' of type string
+    AMT ='1234.56' of type string
+    CODE ='X1' of type string
+    COUNT ='21' of type string
+    -------------------------------------------
+    make object! [
+        NAME: "James"
+        ADDRESS: "1802 Main St"
+        PHONE: "612-926-1002"
+        DATE: "02-FEB-2002"
+        AMT: "2345.67"
+        CODE: "X2"
+        COUNT: "22"
+    ]
+    NAME ='James' of type string
+    ADDRESS ='1802 Main St' of type string
+    PHONE ='612-926-1002' of type string
+    DATE ='02-FEB-2002' of type string
+    AMT ='2345.67' of type string
+    CODE ='X2' of type string
+    COUNT ='22' of type string
+    -------------------------------------------
+    make object! [
+        NAME: "Jeremy"
+        ADDRESS: "1803 Main St"
+        PHONE: "612-926-1003"
+        DATE: "03-MAR-2004"
+        AMT: "3456.78"
+        CODE: "X3"
+        COUNT: "23"
+    ]
+    NAME ='Jeremy' of type string
+    ADDRESS ='1803 Main St' of type string
+    PHONE ='612-926-1003' of type string
+    DATE ='03-MAR-2004' of type string
+    AMT ='3456.78' of type string
+    CODE ='X3' of type string
+    COUNT ='23' of type string
+    -------------------------------------------
+    >>
+
+Note that the result of the CSVREAD function is an object, called RECORD,
+that contains the words from the heading line with values assigne to them.
+The values are referenced by "object-name/RECORD/column-name." 
+
+---A fixed-format file helper
+
+Now the question becomes, can we do something similar with a fixed-format
+file where nothing in the file identifies the data elements?
+
+The module below creates a "fixed-format file" object.  As with the CSV
+object, you can make instances of it to have several files open at the
+same time.  After you make the object, you have to perform a function to
+open the file.  That function expects a file name, and then a block
+What that block contains is repetitions of words and pairs.  
+That is, [word-1 pair-1 word-2 pair-2 ... word-n pair-n].
+
+Each word and its pair represent an item of data on the fixed-format
+record.  The word is what we want to call it in a program.  The pair
+is the column position and length of the data item.  After calling
+the function to "open" the file, you may read records using the supplied
+function and refer to the data items on a record by name.  The following
+example shows how.
+
+Here is the module.
+
+    REBOL [
+        Title: "Fixed-Format File object"
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is an "object" for a fixed-format file, that is, a file that is      ]
+    ;; [ "line sequential" and has text data fields in fixed locations.            ]
+    ;; [ You can create instances of this object and assign names to sub-strings   ]
+    ;; [ of the data in each record, and then refer by name to the "fields"        ]
+    ;; [ thus created.                                                             ]
+    ;; [ To create an instance of the FFF object:                                  ]
+    ;; [     object-name: make FFF []                                              ]
+    ;; [ To process records until end of file, so an initial read and then use     ]
+    ;; [ the "until" loop with the last function call in the "until" loop being    ]
+    ;; [ "object-name/READ-RECORD, like this:                                      ]
+    ;; [     object-name/READ-RECORD                                               ]
+    ;; [     until [                                                               ]
+    ;; [         ...code of your own...                                            ]
+    ;; [         object-name/READ-RECORD  ;; last function call in loop            ]
+    ;; [     ]                                                                     ]
+    ;; [---------------------------------------------------------------------------]
+
+    FFF: make object! [
+
+        FILE-ID: none       ;; file name passed to "open" function
+        FIELDS: none        ;; [fieldname locationpair fieldname locationpair, etc]
+        FILE-DATA: []       ;; whole file in memory, as block of lines
+        RECORD-AREA: ""     ;; one line from FILE-DATA, for picking apart
+        RECORD: none        ;; an object we will create to make new words available
+        RECORD-NUMBER: 0    ;; for keeping track of which line we picked
+        FILE-SIZE: 0        ;; number of lines in FILE-DATA
+        EOF: false          ;; set when we "pick" past end 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Open an existing file. What does that mean?                               ]
+    ;; [ We are supplied with a file ID and a block of field names.                ]
+    ;; [ Each field name is followed by a pair, which indicates the position       ]
+    ;; [ and length of the substring that represents, in each record, the value    ]
+    ;; [ of the field.  These items (words plus positions) must be saved so        ]
+    ;; [ that we can use them each time we read a record, in order to take         ]
+    ;; [ apart the record into its fields.                                         ]
+    ;; [---------------------------------------------------------------------------]
+
+        OPEN-INPUT: func [
+            FILEID [file!]     ;; will be a file name
+            FIELDLIST [block!] ;; will be sets of word! and pair!
+        ] [
+        ;;  -- Save what was passed to us.
+            FILE-ID: FILEID
+            FIELDS: copy []
+            FIELDS: copy FIELDLIST
+        ;;  -- Read the entire file into memory and set various items in preparation
+        ;;  -- for reading the file a record at a time.
+            FILE-DATA: copy []
+            FILE-DATA: read/lines FILE-ID
+            FILE-SIZE: length? FILE-DATA
+            RECORD-NUMBER: 0
+            EOF: false
+        ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Read the next record.  What does this mean?                               ]
+    ;; [ Using the record number counter, pick the next line in the block          ]
+    ;; [ of file data.  Then, using the list of field names, set the word that     ]
+    ;; [ is the field name to the value that is the substring indicated by the     ]
+    ;; [ pair for that word.                                                       ]
+    ;; [ After a record is "read" in this way, the calling program may refer       ]
+    ;; [ to each field by FFF/RECORD/<word> where <word> is one of the words       ]
+    ;; [ that was passed to OPEN-INPUT.                                            ]
+    ;; [---------------------------------------------------------------------------]
+
+        READ-RECORD: does [
+        ;; pick a line if there are lines left to be picked 
+            RECORD-NUMBER: RECORD-NUMBER + 1
+            if (RECORD-NUMBER > FILE-SIZE) [
+                EOF: true
+                return EOF
+            ]
+            RECORD-AREA: copy ""
+            RECORD-AREA: copy pick FILE-DATA RECORD-NUMBER
+        ;; Set the words passed to the "open" function to values extracted
+        ;; out of the data, based on the locations passed to the "open" function.   
+        ;; Put those words and values in the RECORD object.
+            RECORD: make object! []
+            foreach [FIELDNAME POSITION] FIELDS [
+                RECORD-AREA: head RECORD-AREA
+                RECORD-AREA: skip RECORD-AREA (POSITION/x - 1)
+                RECORD: make RECORD compose [
+                    (to-set-word FIELDNAME) copy/part RECORD-AREA POSITION/y] 
+            ]
+        return EOF 
+        ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Open a file for output.  What does that mean?                             ]
+    ;; [ A common way of working with files in REBOL is to have the whole file     ]
+    ;; [ in memory, so we will do that.                                            ]
+    ;; [ We will clear out our data areas, and then when we "write" to the file    ]
+    ;; [ we will add a formatted line to the data area, and then write the         ]
+    ;; [ whole data area to disk when we "close" the file.                         ]
+    ;; [ To make the supplied field names available for values, we will create     ]
+    ;; [ a RECORD object out of the supplied names.                                ]
+    ;; [ The caller will set values in FFF/RECORD/data-name.                       ]
+    ;; [---------------------------------------------------------------------------]
+
+        OPEN-OUTPUT: func [
+            FILEID [file!]
+            FIELDLIST [block!]
+        ] [
+            FILE-ID: FILEID
+            FIELDS: copy FIELDLIST
+            FILE-DATA: copy []
+            FILE-SIZE: 0
+            RECORD-NUMBER: 0
+            EOF: false
+            RECORD: make object! []
+            foreach [FIELDNAME POSITION] FIELDS [
+                RECORD: make RECORD compose [
+                    (to-set-word FIELDNAME) {""}]   
+            ]
+        ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ When writing a file, we have to have a "close" procedure to actually      ]
+    ;; [ put the data into a disk file.                                            ]
+    ;; [---------------------------------------------------------------------------]
+    
+        CLOSE-OUTPUT: does [
+            write/lines FILE-ID FILE-DATA
+        ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Write a record.  What does this mean?                                     ]
+    ;; [ The caller will have set values to the words passed to the "open"         ]
+    ;; [ function, using the RECORD oject created at open time.                    ] 
+    ;; [ That is, set a value to FFF/RECORD/data-name.                             ]
+    ;; [ What we do with them is to put the values of those words                  ]
+    ;; [ into the specified positions in the record area, and then append the      ]
+    ;; [ record area to the data area.                                             ]
+    ;; [ To build the record area, we can't append because we might not be         ]
+    ;; [ adding data from front to back; we can't insert because that might        ]
+    ;; [ move previously-inserted data.  So we will have to make a big blank       ]
+    ;; [ string, "change" data, and then trim off the right end.                   ]
+    ;; [ Remember that our data file is "line sequential" which means that the     ]
+    ;; [ lines end with an LF and can vary in length.                              ]
+    ;; [---------------------------------------------------------------------------]
+
+        WRITE-RECORD: does [
+            RECORD-AREA: make string! 1028
+            foreach [FIELDNAME POSITION] FIELDS [
+                RECORD-AREA: head RECORD-AREA 
+                RECORD-AREA: skip RECORD-AREA (POSITION/x - 1)
+                change/part RECORD-AREA RECORD/:FIELDNAME POSITION/y
+            ]
+            RECORD-AREA: head RECORD-AREA 
+            RECORD-AREA: trim/tail RECORD-AREA
+            append FILE-DATA RECORD-AREA
+        ]
+    ]
+
+Here is a demo using the above module.  To make the demo work syntactically,
+you will have to save the above module as "fffobj.r" on your own computer.
+
+    REBOL [
+        title: "FFF object demo"
+    ] 
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Show how to use the fixed-format file object.                             ]
+    ;; [---------------------------------------------------------------------------]
+
+    do %fffobj.r
+
+    TEST-FIXED-FILE-ID: %test-fixedformat.txt
+    
+    FFF1: make FFF []                     ;; make an instance of the FFF object
+    FFF1/OPEN-INPUT TEST-FIXED-FILE-ID [  ;; read the file, make column heading words
+        NAME 1X10
+        ADDRESS 11X20
+        PHONE 31X10
+        DATE 41X11
+        AMT 52X7
+        CODE 59X2
+        COUNT 61X2
+    ]
+
+    FFF1/READ-RECORD  ;; read first record to get set up for 'until' loop  
+
+    until [  ;; do this loop until last item in it becomes true
+        probe FFF1/RECORD
+        print rejoin ["NAME ='" FFF1/RECORD/NAME "' of type " type? FFF1/RECORD/NAME]
+        print rejoin ["ADDRESS ='" FFF1/RECORD/ADDRESS "' of type " type? FFF1/RECORD/ADDRESS]
+        print rejoin ["PHONE ='" FFF1/RECORD/PHONE "' of type " type? FFF1/RECORD/PHONE]
+        print rejoin ["DATE ='" FFF1/RECORD/DATE "' of type " type? FFF1/RECORD/DATE]
+        print rejoin ["AMT ='" FFF1/RECORD/AMT "' of type " type? FFF1/RECORD/AMT]
+        print rejoin ["CODE ='" FFF1/RECORD/CODE "' of type " type? FFF1/RECORD/CODE]
+        print rejoin ["COUNT ='" FFF1/RECORD/COUNT "' of type " type? FFF1/RECORD/COUNT]
+        print "-------------------------------------------"
+        FFF1/READ-RECORD  ;; reading next record at end of loop returns EOF flag 
+    ]
+
+    halt    
+        
+Note again how you "open" the file and supply the function with names and
+locations and lengths of the "fields" in the data record.
+The "read" procedure will create an object, called RECORD, with those column
+names and values assigned to them.  
+
+Here is the result of the above demo.
+
+    make object! [
+        NAME: "Jordan    "
+        ADDRESS: "1801 Main St        "
+        PHONE: "6129261001"
+        DATE: "01-JAN-2001"
+        AMT: "0123456"
+        CODE: "X1"
+        COUNT: "21"
+    ]
+    NAME ='Jordan    ' of type string
+    ADDRESS ='1801 Main St        ' of type string
+    PHONE ='6129261001' of type string
+    DATE ='01-JAN-2001' of type string
+    AMT ='0123456' of type string
+    CODE ='X1' of type string
+    COUNT ='21' of type string
+    -------------------------------------------
+    make object! [
+        NAME: "James     "
+        ADDRESS: "1801 Main St        "
+        PHONE: "6129261002"
+        DATE: "02-FEB-2002"
+        AMT: "0234567"
+        CODE: "X1"
+        COUNT: "22"
+    ]
+    NAME ='James     ' of type string
+    ADDRESS ='1801 Main St        ' of type string
+    PHONE ='6129261002' of type string
+    DATE ='02-FEB-2002' of type string
+    AMT ='0234567' of type string
+    CODE ='X1' of type string
+    COUNT ='22' of type string
+    -------------------------------------------
+    make object! [
+        NAME: "Jeremy    "
+        ADDRESS: "1801 Main St        "
+        PHONE: "6129261003"
+        DATE: "03-MAR-2004"
+        AMT: "0345678"
+        CODE: "X1"
+        COUNT: "23"
+    ]
+    NAME ='Jeremy    ' of type string
+    ADDRESS ='1801 Main St        ' of type string
+    PHONE ='6129261003' of type string
+    DATE ='03-MAR-2004' of type string
+    AMT ='0345678' of type string
+    CODE ='X1' of type string
+    COUNT ='23' of type string
+    -------------------------------------------
+    >>
+
+To summarize what you have seen above, REBOL is not natively "at home"
+in the world of fixed-format data, but it has some nice tricks up its
+sleeve in its ability to write its own code and run time, so we can
+use those tricks to make it very easy to access data in text files of
+this kind.  If you expect to just report on this data, you are set.
+If you want to do any calculations, then you will have to use the
+various REBOL "to-" functions to convert strings in the file to the
+needed data types.  
+
+===But wait, there's more
+
+With REBOL's "data is code" features, one might wonder what other ways
+REBOL can do things at run time that would be done at comple time in
+other languages.  
+
+---HTML report module
+
+Here is a module and a demo that builds on the CSV
+object previously presented.  This module can be used to present a basic
+columnar report of data items specified at run time.  One calls a 
+procedure with a list of words, and the procedure evaluates those words
+and puts them into html markup.  The words to be reported on are not
+known until run time.  Here is the module.  To run the coming demo,
+save it as "htmlrep.r" on your computer.  In this module, there is a 
+lot of documentation in comments before the REBOL header. 
+
+    TITLE
+    HTML report
+
+    SUMMARY
+    This is a module to help make a "report" that is directed to an html table.
+    It provides services to "open" and "close" the report, and to emit heading
+    and detail lines.  The result will be a single html file for viewing on
+    a screen.  For a paper copy of the "report," one would print the html page.
+    The module does not provide any page breaks that would make the printed
+    version of this page look good.  Controlling printing to physical paper
+    is not part of the mission of html.
+
+    DOCUMENTATION
+    Load the module into your program with:
+
+    do %htmlrep.r
+
+    Before the first call:
+
+    1.  Put a file name in HTMLREP-FILE-ID.  This should be a value with
+        the type of "file."  In other words, put a percent sign in front of it.
+    2.  Put a value in HTMLREP-TITLE.
+    3.  Put a program in HTMLREP-PROGRAM-NAME.  This will appear in a footer.
+    4.  call HTMLREP-OPEN.  
+
+    Optionally, before "printing" the first detail line, call HTMLREP-EMIT-HEAD
+    in the following manner:
+
+    HTMLREP-EMIT-HEAD ["literal-1" ... "literal-n"]
+
+    where literal-1, etc., are strings to be turned into <TH> entries.
+
+    To "print" a line of data, call HTMREP-EMIT-LINE in the following manner:
+
+    HTMLREP-EMIT-LINE reduce [word-1...word-n]
+
+    where word-n is the word whose value you want to print.  The procedure will
+    generate a <TD> entry for each word, in one row of an html table.
+    Historical note: In the first version of this module, we just passed the
+    words in a block and did not reduce the block, and the HTMLREP-EMIT-LINE
+    procedure used the "get" function to get the values of the words.
+    This turned out not to work if the words passed in were in an object, so
+    we moved the "reduction" process up to the level of the caller.
+    Now we pass values to HTMLREP-EMIT-LINE instead of words.
+
+    At the end:
+
+    Call HTMLREP-CLOSE.  You MUST do this step because all the other procedures
+    just build up an html string in memory.  The HTMLREP-CLOSE procedure actually
+    writes the data to disk under the name you loaded into HTMLREP-FILE-ID.
+
+    SCRIPT
+    REBOL [
+        Title: "HTML report"
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Items set up by the caller.                                               ]
+    ;; [---------------------------------------------------------------------------]
+
+    HTMLREP-FILE-ID: %htmlrep.html
+    HTMLREP-TITLE: "&nbsp;"
+    HTMLREP-PRE-STRING: "&nbsp;"
+    HTMLREP-POST-STRING: "&nbsp;"
+    HTMLREP-PROGRAM-NAME: "&nbsp;"
+    HTMLREP-CODE-BLOCK: "&nbsp;"
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Internal working items.                                                   ]
+    ;; [---------------------------------------------------------------------------]
+
+    HTMLREP-FILE-OPEN: false
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the top of the html page.                                         ]
+    ;; [---------------------------------------------------------------------------]
+
+    HTMLREP-PAGE-HEAD: {
+    <html>
+    <head>
+    <title> <%HTMLREP-TITLE%> </title>
+    <style>
+    body {
+       background: #F2F2E3;
+    }
+    h1 {
+        color: #9931fE;
+        font-family: rial, helvetica, sans-serif;
+    }
+    th {
+        font-family: arial, helvetica, sans-serif;
+    }
+    td {
+        font-family: arial, helvetica, sans-serif;
+    }
+    p {
+        font-family: arial, helvetica, sans-serif;
+    }
+    </style>
+    </head>
+
+    <body>
+    <table width="100%" border="0">
+    <tr>
+
+    <td><img border=0 alt="Company logo"
+    src="data:image/gif;base64,R0lGODlhbABsAPQAAAAAAAgMDRQbHB0mKCYwMi05OzRCRDtKTEFRVEdYW0xfYlJl
+    aVdsb1xydWF4e2V9gWqDhwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    AAAAAAAAAAAAAAAAACH5BAAAAAAALAAAAABsAGwAAAX+ICSOZGmeaKqubOu+cCzP
+    dG3feK7vfO//wKBwSCwaj8ikcslMNhjQKMPRrEIaCgRhAOh6v10BAbGgWoWORCEA
+    bru/AoPicd45ENy3ft8tzOs1CgR8hIUGDIAvDwgChY6FAgqJKwlsj5eEBA2TJgyN
+    mKCECZwiDwahqHwEpJ6YBAcIsQYElqleBZwIlwYLKQ4KBbYAvYCmjwZmLA4HtZcC
+    iQ95hAKIMQ7BmJJ10Y4FdDQKzXzP29J8BjgN4nraVtyGOuqZgNiE6Dvye9VWuoUD
+    PvncHKjDwFGAZDwWvAnwrcqDdW/a+TjghpiVeqqGmAMw8IxCR5uEPFigBcA9d5/+
+    7JEq0q8QwpU/HjpaBVNIS0IWa/qQWSiAziAJjv0EkhLnUB8FHx31cWrm0h4Q3yB4
+    uuOjo31Ub1BUmjVHUT7/ut54cAmXWBtWC009W+OmKLY1Bj3CChfGVz5067rA9FIv
+    iwaY/MZIylWwi7SFDL9wS0ixC8Z8HLeAvEcHgcuYM2vezHlzyB2U9egQhrdH6Dej
+    SevJe+O0m9Sq3bC24brNZxux38xui2k3DAQF7goTcKBv6948HCwwIPwSAd+0Ma31
+    sQDjJYnUMXUEogDUdCCEnQoJ+sjnEMCXzAdx4LwIKOM8Ln0PspEQdh/yi1hXKSQ/
+    kdpgkBOEf0OEB1J/j8z7F0RUemz3A4FD7MeHeg8maER32QxoYRFkYRJWhY4oGISE
+    pYGo1hGIFUITfhsa0dwe9+UA4X+gMMRiiEjwVNaNJyIBYBujxNfiES/ukRMOMxaR
+    Yk+33ZCkfqEEcGQNTxKhIyZBOjkkEgY6B98LVRZBXpQINBQDeo5kuURTqARgQJMq
+    PCBImEewmQpxC8AJAQMk1TchdHXmltsAX64pKGkinoHhoaBQU1MDRTLaRpk/PUCi
+    pF9o8lQrmLYhwJRHVdJpGDE+9UACkaISiWHV5XaIZBDIaQCDewTgh5mwivCLFn52
+    EQABBiQAaK4kPCAFscgmq+yyzDbr7LNJhAAAOw=="></td>
+
+    <td><H1>REBOL Reporting Services</H1></td>
+    </tr>
+    </table>
+    <hr>
+    <p>
+    Created on: <% now %>
+    </p>
+    <hr>
+
+    <h1> <%HTMLREP-TITLE%> </h1>
+
+    <p>
+    <% HTMLREP-PRE-STRING %>
+    </p>
+
+    <table width="100%" border="1">
+    }
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the end of the html page.                                         ]
+    ;; [---------------------------------------------------------------------------]
+
+    HTMLREP-PAGE-FOOT: {
+    </table>
+    <p>
+    <% HTMLREP-POST-STRING %> 
+    </p>
+    <hr>
+    <p>
+    The above report was produced by the Information Systems Division.
+    Refer to a program called "<% HTMLREP-PROGRAM-NAME %>."
+    </p>
+    <hr>
+    <pre>
+    <% HTMLREP-CODE-BLOCK %>
+    </pre>
+    </body>
+    </html>
+    }
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the area where we will build up the html page in memory.          ]
+    ;; [---------------------------------------------------------------------------]
+
+    HTMLREP-PAGE: make string! 5000
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the procedure to "open" the report.                               ]
+    ;; [ The "build-markup" function will replace the placeholders in the html     ]
+    ;; [ with the values resulting from their evaluation.                          ]
+    ;; [---------------------------------------------------------------------------]
+
+    HTMLREP-OPEN: does [
+        HTMLREP-PAGE: copy ""
+        append HTMLREP-PAGE build-markup HTMLREP-PAGE-HEAD
+        append HTMLREP-PAGE newline
+        HTMLREP-FILE-OPEN: true
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the procedure to "close" the report.                              ]
+    ;; [ It writes to disk the html page we have built up in memeory.              ]
+    ;; [---------------------------------------------------------------------------]
+
+    HTMLREP-CLOSE: does [
+        append HTMLREP-PAGE build-markup HTMLREP-PAGE-FOOT
+        append HTMLREP-PAGE newline
+        write HTMLREP-FILE-ID HTMLREP-PAGE
+        HTMLREP-FILE-OPEN: false
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This procedure emits a row of an html table containing heading            ]
+    ;; [ elements supplied by the caller in a block of strings.                    ]
+    ;; [---------------------------------------------------------------------------]
+
+    HTMLREP-EMIT-HEAD: func [
+        "Emit a heading row with literals supplied in a block"
+        HTMLREP-HEADING-BLOCK [block!]
+    ] [
+        append HTMLREP-PAGE "<TR>"
+        foreach HTMLREP-HEAD-LIT HTMLREP-HEADING-BLOCK [
+            append HTMLREP-PAGE "<TH>"
+            append HTMLREP-PAGE to-string HTMLREP-HEAD-LIT ; to-string just in case
+            append HTMLREP-PAGE "</TH>"                    ; caller supplied words
+        ]
+        append HTMLREP-PAGE "</TR>"
+        append HTMLREP-PAGE newline
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This procedure emits a row of an html table containing the values of      ]
+    ;; [ words supplied by the caller in a block.                                  ]
+    ;; [ Note the requirement that the caller "reduce" the block passed to this    ]
+    ;; [ function so that we are getting values and not words.                     ]
+    ;; [---------------------------------------------------------------------------]
+
+    HTMLREP-EMIT-LINE: func [
+        "Emit a detail row with values supplied in a block"
+        HTMLREP-DETAIL-BLOCK [block!]
+    ] [
+        append HTMLREP-PAGE "<TR>"
+        foreach HTMLREP-VALUE HTMLREP-DETAIL-BLOCK [
+            append HTMLREP-PAGE "<TD>"
+            append HTMLREP-PAGE HTMLREP-VALUE
+            append HTMLREP-PAGE "</TD>"
+        ]
+        append HTMLREP-PAGE "</TR>"
+        append HTMLREP-PAGE newline
+    ]
+    
+Now, using the above html reporting module, the CSV object module, and the
+CSV test data file from the previous script that made our test data, you
+can run the following demo to make a quick html listing of the CSV data.
+
+    REBOL [
+        Title: "Show usage of csvobj.r and htmlrep.r"
+    ]
+
+    do %csvobj.r
+    do %htmlrep.r
+
+    TEST-CSV-FILE-ID: %test-csvformat.csv
+    DEMO-REPORT-FILE-ID: %test-csvlisting.html
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Create a CSV object for the above-mentioned file.                         ]
+    ;; [ Bring the file into memory.                                               ]
+    ;; [ Read the first record to prepare for looping through all records.         ]
+    ;; [---------------------------------------------------------------------------]
+    DEMOCSV: make CSV []
+    DEMOCSV/CSVOPEN TEST-CSV-FILE-ID
+    DEMOCSV/CSVREAD
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Prepare the html report.  Load headings, set file names, etc.             ]
+    ;; [---------------------------------------------------------------------------]
+    HTMLREP-FILE-ID: DEMO-REPORT-FILE-ID
+    HTMLREP-TITLE: copy "Quick CSV file listing"
+    HTMLREP-PROGRAM-NAME: copy "csvhtmldemo.r"
+    HTMLREP-OPEN
+    HTMLREP-EMIT-HEAD DEMOCSV/HEADINGS
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Loop until the CSVREAD function returns the EOF marker (End Of File).     ]
+    ;; [ We do have to do a bit of data conversion, as the modules currently       ]
+    ;; [ are written.                                                              ]
+    ;; [ HTML-EMIT-LINE expects a block of values.                                 ]
+    ;; [ The items in DEMOCSV/HEADINGS are strings, and so must be converted to    ]
+    ;; [ words so that they can be evaluated and their values appended to          ]
+    ;; [ VALUE-BLOCK.                                                              ]
+    ;; [ But still, that's not a lot of work.                                      ]
+    ;; [---------------------------------------------------------------------------]
+    until [
+        VALUE-BLOCK: copy []
+        foreach WORD DEMOCSV/HEADINGS [
+            VALUE-NAME: to-word WORD
+            append VALUE-BLOCK DEMOCSV/RECORD/:VALUE-NAME
+        ]
+        HTMLREP-EMIT-LINE VALUE-BLOCK               
+        DEMOCSV/CSVREAD
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Put the output file on disk and show it to confirm we are done.           ]
+    ;; [---------------------------------------------------------------------------]
+    HTMLREP-CLOSE
+    browse DEMO-REPORT-FILE-ID 
+
+---Simple lookup table
+
+Here is a way to use a CSV file to make a simple lookup table.  
+This will require the CSV object from above, a bit of copying and pasting 
+from below, and running a demo script to follow.  Or, you could just read
+about it since it is not complicated.
+
+To start, copy the following lines and paste them into a text editor,
+and save them as "postalcodes.csv" on your computer.  The are a handful
+of United States postal codes (or state abbreviations) just so we can have
+some demo data to work with. If you copy them out and get leading 
+indentations, you will have to remove those by hand.  They have the 
+leading spaces in this document to make them look like code, but we
+don't want the leading spaces in the file.
+
+    POSTALCODE,STATENAME
+    AL,Alabama
+    AK,Alaska
+    MN,Minnesota
+    WI,Wisconsin
+    ND,North Dakota
+    SD,South Dakota
+
+The list was short because this is a demo.  Now, copy out the following
+script and run it.  You will have to save it as a script file because it
+is going to run the csvobj.r module that we made previously.  
+What this demo will do is pull the data out of the file we just made,
+and save it on disk in a way such that REBOL can load it with the 
+"load" function.  When it is loaded in that manner, it will become a
+block that can be searched with the "select" function.
+
+    REBOL [
+        title: "Make postal code table"
+    ] 
+
+    do %csvobj.r
+
+    POSTAL-TABLE: copy []
+    POSTAL-FILE: %postalcodes.txt
+
+    POSTALCODES: make CSV []
+
+    POSTALCODES/CSVOPEN %postalcodes.csv
+    POSTALCODES/CSVREAD
+
+    until [
+        append POSTAL-TABLE POSTALCODES/RECORD/POSTALCODE
+        append POSTAL-TABLE POSTALCODES/RECORD/STATENAME
+        POSTALCODES/CSVREAD
+    ]
+
+    save POSTAL-FILE POSTAL-TABLE
+
+    alert "Done" 
+
+And now, run the following demo.  It will load the postal code table
+created above, in a format that REBOL can work with, and, since the
+postal codes are not duplicated anywhere in the state names, we can
+use the REBOL "select" function to obtain a state name based on the
+postal code.
+
+    REBOL [
+        title: "Demo postal code table"
+    ] 
+
+    POSTAL-TABLE: copy []
+    POSTAL-TABLE: load %postalcodes.txt
+
+    print ["MN is" select POSTAL-TABLE "MN"]
+    print ["AL is" select POSTAL-TABLE "AL"]
+    print ["SD is" select POSTAL-TABLE "SD"]
+    print ["VT is" select POSTAL-TABLE "VT"]
+
+    halt
+
+Here is the result:
+
+    MN is Minnesota
+    AL is Alabama
+    SD is South Dakota
+    VT is none
+    >>
+
+===Here there be monsters
+
+The examples above do not look like examples from other sources on the
+internet.  Why might that be?  For a beginner, it can be helpful to 
+plod along deliberately, to keep things straignt in one's head.
+Use temporary variables for intermediate results, use global variables
+so they can be probed, write your own loops so you can display results
+as the program runs, things like that.  Computers are so fast now that
+one can forget that everything has a cost.
+
+Without knowing how REBOL works on the inside, we can't know exactly
+what costs there are to different things, but are there some assumptions
+we could make?
+
+One obvious assumption would be that any variable has a cost in memory.
+So an obvious improvement in any program would be to avoid using
+more variables than necessary.  We could just adopt that as a general
+rule.
+
+Another assumption that might be valid is in the area of loops and
+using REBOL functions.  There are functions, like "copy" that
+almost certainly have loops in them somewhere, down at some low
+level.  If one wanted to copy a string of characters, and coded
+one's own loop that used "copy" as one of the statments in the
+loop, might one be, at a low level, creating a loop within a loop?
+The answer is, we don't know.  But it might be safe to adopt,
+as another general rule, using REBOL's functions whenever possible
+instead of reinventing things, even if the re-invention helps in
+your understanding of your own program.  
+
+And is there a more general rule that includes the above two rules
+plus others that we might not be aware of?  Looking at REBOL code
+on the internet, from people who are highly skilled with it, it
+appears that the general rule might be just to keep the code
+compact.  The less you say, the more likely it is that you are
+using the REBOL functions to best effect and not doing things that
+are not necessary. 
+
+With that general principle in mind, let's revisit some of the
+above functions and try to streamline them a bit.  
+
+---SPACEFILL, improved
+
+Here is a more compact version, with notes following.  
+The notes will refer to the SPACEFILL function defined earlier.
+
+    REBOL [
+        title: "SPACEFILL function, improved"
+    ] 
+
+    SPACEFILL: func [
+        "Left justify a string, pad with spaces to specified length"
+        INPUT-STRING 
+        FINAL-LENGTH
+    ] [
+        head insert/dup tail copy/part trim INPUT-STRING FINAL-LENGTH #" " max 0 FINAL-LENGTH - length? INPUT-STRING
+    ]
+
+    ;; Uncomment to test
+    ;print rejoin ["'" SPACEFILL "   ABCD1234 " 10 "'"]
+    ;halt 
+
+First, let's be sure we understand it.
+
+REBOL functions are evaluated from left to right, which means we have to 
+work our way into the innermost function first because that produces the
+results passed to the functions to the left.
+
+The innermost function is "trim" which takes the spaces off both ends
+of the INPUT-STRING.
+
+The next function is the "copy/part" which makes a copy of the INPUT-STRING
+but for only as many characters as specified in the FINAL-LENGTH.
+The reason for this is that the caller might have asked for a final length
+less than the actual length of the data being padded.  That makes no
+sense, but it must be accounted for.  If the caller asked for a final 
+length greater that the INPUT-STRING, as would be normal, the "copy/part"
+will copy only as many characters as there actually are in the trimmed
+INPUT-STRING. 
+
+The next function is "tail" which positions us to the end of the 
+trimmed and copied string.
+
+The next function is the "insert/dup" function which adds the "space"
+character (#" ") to the tail of the copied string, for a specified number
+of times. And what is that specified number?  It is the maximum of zero 
+(in case we don't have to add any) or however many more spaces we need to
+reach the desired length.  And how many is that?  It is the FINAL-LENGTH
+minus the number of characters we already have, which is the current 
+length of the INPUT-STRING.
+
+And finally, to make sure we return to the caller the padded version of
+INPUT-STRING, we position ourselves to the head of INPUT-STRING.
+
+Now let's note the improvements.
+
+There are no local variables, compared to our previous version.
+We trim the INPUT-STRING, but we don't have to store it in a tempoary
+variable because we can just pass it up the line of function calls.
+Similarly, the LENGTH-OF-TRIMMED-STRING and NUMBER-OF-SPACES-TO-ADD
+are calculated oh the fly and don't need temporary variables.
+And the FINAL-PADDED-STRING is not necessary because we just pad the
+INPUT-STRING and pass that back to the caller.  
+
+And finally, to go the last step in REBOL-izing the original SPACEFILL
+function, we will shorten up some of our variables and condense the
+code a bit to get:
+
+    REBOL [
+        title: "SPACEFILL function, improved"
+    ] 
+
+    SPACEFILL: func [txt len] [head insert/dup tail copy/part trim txt len #" " max 0 len - length? txt]
+
+    ;; Uncomment to test
+    ;print rejoin ["'" SPACEFILL "   ABCD1234 " 10 "'"]
+    ;halt
+ 
+---SPACEFILL-LEFT, improved
+
+Modeling after our efforts to streamline SPACEFILL (thanks to some help
+from the REBOL community on the internet), here a shorter version of
+SPACEFILL-LEFT which adds padding on the left.
+
+    REBOL [
+        title: "SPACEFILL-LEFT function, improved"
+    ] 
+
+    SPACEFILL-LEFT: func [
+        "Right justify a string, pad with spaces to specified length"
+        INPUT-STRING
+        FINAL-LENGTH
+    ] [
+        trim INPUT-STRING
+        either FINAL-LENGTH > length? INPUT-STRING [
+            return head insert/dup INPUT-STRING " " FINAL-LENGTH - length? INPUT-STRING
+        ] [
+            return copy/part INPUT-STRING FINAL-LENGTH
+        ]
+    ]
+
+    ;; Uncomment to test
+    ;print rejoin [{'} SPACEFILL-LEFT "   ABCD1234 "   10 {'}]
+    ;print rejoin [{'} SPACEFILL-LEFT "  XXX YYY 123 " 10 {'}]
+    ;halt
+
+This is not quite as compact, but it does take out some stuff that is not
+needed.  
+
+The temporary variables are gone because what they held can be derived
+within a line of function calls.  The "trim" function does not copy the
+string that is trimmed, so it is not necessary to have a temporary copy
+of the trimmed INPUT-STRING.  The "insert/dup" starts inserting at the
+head, so we don't need a loop to keep returning to the head and adding
+a space there.
+
+In other languages, depending on the language, one would have to make
+temporary variables, counters, and such, to accomplish something.
+REBOL uses the method of calling functions and having the results feed
+other functions, so one can do away with some of what is needed in
+other languages.  This method is part of REBOL's power, the need for
+less code.  If you are familiar with "more code," you can write that
+way to start using REBOL.  There are other areas where REBOL has power,
+and it would be a shame to lose that power just because you can't write
+the most compact REBOL.  But as you get handier with REBOL, you can
+start making your code more compact, and tap into that next level
+of power. 
+
+===And in conclusion
+
+This document tries to fill in a space between a reference and a tutorial.
+A reference gives details about how to use specific features, but does 
+not necessarily explain how to put those features together to solve a
+problem.  A tutorial shows examples of how to do things but not necessarily
+in great detail if the tutorial is trying to explain a lot of things
+without being a huge document.  This document takes one problem and tries
+to explain in some detail how to use REBOL to solve it. 
+
+The problem being addressed here is what to do when you come up against
+a CSV or fixed-format file and want to get the data items out of it to
+do something useful.  If you know REBOL, then that problem probably 
+would be trivial to solve for you.  But if you don't know REBOL well,
+and are experiencing the "where do I start" reaction, the tips and tools
+here might help. 
+
