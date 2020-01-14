@@ -1,0 +1,1850 @@
+Parsing by examples
+
+    Date written: 14-SEP-2018
+    Date revised: 06-DEC-2019
+
+    The "parse" function in REBOL can be a bit hard to understand.  
+    This document is not an attempt to explain it.  Instead, it is a
+    collection of examples that we hope will become large enough so
+    that if you have a question about parsing you will be able to
+    find another person's solution and modify that for your own use.
+
+===Target audience and references
+
+The target audience is the REBOL beginner who is having a terrible
+time using the "parse" function.  It is assumed that the reader knows
+how to write and run REBOL scripts.
+
+References
+
+<a href="http://www.rebol.com/docs/core23/rebolcore-15.html">
+REBOL documentation about parsing</a>
+
+<a href="http://business-programming.com/business_programming.html">
+Nick Antonaccio's definitive guide about doing useful stuff with REBOL</a>
+
+<a href="http://www.codeconscious.com/rebol/parse-tutorial.html">
+http://www.codeconscious.com/rebol/parse-tutorial.html</a>
+
+===Introduction
+
+Since this document is written for beginners by a beginner, some notes on
+parsing would be in order.
+
+Parsing refers to taking apart text.  To a computer, text in memory or in
+a file is just a big string of characters, one after the other.  It has no
+meaning.  A good example is a computer program.  How does a language
+interpreter make "sense" of the big string of characters that is a computer
+program?  Consider a line like this:
+
+    COUNTER = COUNTER + 1
+
+What might a computer have to do to make sense of that?
+
+Basically, it would have to go through that text one character at a time.
+It would ignore the leading blanks, and when it found the first "C" it
+would store that somehere.  Then it would pick off characters, add them
+one after the other to that first "C" until it hit the first blank.
+Then it would have a "token" with the value of "COUNTER."  It might then
+check a symbol table to see if that token had been encountered before,
+and make an entry in the table if "COUNTER" could not be found.
+
+Then it would skip over blanks to the next non-blank which would be the
+equals sign.  That might send the program off to some area where it
+would scan the input looking for items that constituted an "expression"
+which would be more tokens that are words, or operators, or numbers,
+and so on.  
+
+That operation of taking apart the text is referred to as parsing.
+You could do it in any language, but in some languages it would be hard.
+REBOL tries to make it easier by providing the "parse" function.
+But how do you do that in a general-purpose way that is useful?
+REBOL uses an embedded mini-languge to describe what you want done 
+with the input.  
+
+This document is a collection of parsing examples compiled with the hope
+that with enough examples you will either be able to understand the
+parsing function or be able to find an example you can modify to solve
+your own parsing problem.  
+
+Remember this key concept as you read this:  By a beginner for beginners.
+
+===Examples
+
+These examples are harvested from wherever they could be found.  
+If someone else wrote them, credit is given. 
+
+---Finding input names on an html form
+
+Let's say you have an html page with a form, and you want to write a program
+to process the form. The processing for one input item of the form is going
+to be similar to the processing for all items.  You will have to check if
+the item has been filled in, check it length, check its value for valididy,
+and so on.  You could, in theory, generate code to do all that if only you
+could get your hands on the names of the input items.  Let's say the form
+looked like this:
+
+    <html>
+    <head><title></title></head>
+    <body>
+    <form action="http://website/cgi-bin/testprogram.py" method="post">
+    Data-name-1: <input type="text" size="30" name="DATA-NAME-1"><br>
+    Data-name-2: <input type="text" size="30" name="DATA-NAME-2"><br>
+    Data-name-3: <input type="text" size="30" name="DATA-NAME-3"><br>
+    <input type="submit" name="SUBMITBUTTON" value="Process">
+    </form>
+    </body>
+    </html>
+    
+How could you get your hands on the "name" attributes?  Look at the
+text for a pattern.  Each name is preceded by the text name=" and
+terminated by the next quote.  So if you could scan through the name="
+and then pick off characters to the next quote, and repeat that to
+the end of the text, you would have found all the names.
+The rule that makes that happen is as follows, assuming the html text
+is called HTMLTEXT.
+
+    NAMES: copy []
+    parse HTMLTEXT [
+        any [thru {name="} copy NM to {"} (append NAMES to-string NM)] to end 
+    ]
+
+This example is tidy enough that you could package it into a useful function.
+The function could take the name of an html file that contained a form, and
+return a block of the input names on the form.  Like this:
+
+    PARSE-INPUT-NAMES: func [
+        HTMLFILE
+        /local HTMLTEXT NAMES
+    ] [
+        HTMLTEXT: read HTMLFILE
+        NAMES: copy []
+        parse HTMLTEXT [
+            any [thru {name="} copy NM to {"} (append NAMES to-string NM)] to end 
+        ]
+        return NAMES
+    ]
+
+---Script documentation a la powershell
+
+Here is a use of parsing that can aid with documenting scripts.
+Often, there is more motivation to keep documentation up to date
+if it is right there in the scripts.
+
+In REBOL, comments can precede the REBOL header.  Powershell has
+a scheme of placing documentation in the front of a script, with section
+headers.  Consider the following idea for REBOL.
+
+    TITLE
+    Test script to make sure the program runs.
+    
+    SUMMARY
+    This is a demo script that you can run to make sure
+    things are working.  It has the minimum code to do something.
+    
+    DOCUMENTATION
+    Modify the code as needed to do something useful.
+    Make sure you have the interpreter installed if you want
+    to double-click the script to run it.  Otherwise, you
+    could make a batch file to run the script with the
+    command-line switches:
+    
+        -i -s --script (script-name)
+    
+    SCRIPT
+    REBOL [
+        Title:  "COB global services module"
+    ]
+        alert "Script has run"
+
+Notice how documentation is in front of the REBOL header, divided 
+into sections called TITLE, SUMMARY, DOCUMENTATON, and the script
+itself under the section SCRIPT.
+
+Assuming you don't use those words elsewhere in the script, it is
+possible to pull out those four sections by parsing the script file.
+Then you could do whatever you want with those sections.  One idea
+would be to make a web page of documentation of all the scripts in
+some folder.  
+
+The code to extract those sections looks like this:
+
+    LIST-TITLE: ""
+    LIST-SUMMARY: ""
+    LIST-DOCUMENTATION: ""
+    LIST-SCRIPT: ""
+    
+    LIST-FILE-DATA: read LIST-FILE-PATH
+    ;;  -- Extract the four parts of the documentation.
+    parse/case LIST-FILE-DATA [thru "TITLE" copy LIST-TITLE to "SUMMARY"]
+    parse/case LIST-FILE-DATA [thru "SUMMARY" copy LIST-SUMMARY to "DOCUMENTATION"]
+    parse/case LIST-FILE-DATA [thru "DOCUMENTATION" copy LIST-DOCUMENTATION to "SCRIPT"]
+    parse/case LIST-FILE-DATA [thru "SCRIPT" copy LIST-SCRIPT to end]
+
+The above is an example of "brute-force programming."  You actually do not
+need to parse the input four times; one parse will do with the following rules:
+
+    parse/case LIST-FILE-DATA [ 
+        thru "TITLE" copy LIST-TITLE to "SUMMARY" 
+        thru "SUMMARY" copy LIST-SUMMARY to "DOCUMENTATION" 
+        thru "DOCUMENTATION" copy LIST-DOCUMENTATION to "SCRIPT" 
+        thru "SCRIPT" copy LIST-SCRIPT to end 
+    ] 
+
+If you want to account for missing sections, AND you are sure that none of 
+the section titles appears anywhere in the code, then you could do this:
+
+    parse/case LIST-FILE-DATA [ 
+        any [ 
+            thru "TITLE" copy LIST-TITLE to "SUMMARY" 
+            | 
+            thru "SUMMARY" copy LIST-SUMMARY to "DOCUMENTATION" 
+            | 
+            thru "DOCUMENTATION" copy LIST-DOCUMENTATION to "SCRIPT" 
+            | 
+            thru "SCRIPT" copy LIST-SCRIPT to end 
+        ] 
+    ] 
+
+Thanks to "johnk" on rebolforum.com for the last two variations.
+
+---Dissecting a CSV file
+
+An item that begs to be parsed is a file with data separated by a delimiter.
+A CSV file is one such example, where the data items on each line are
+separated by commas, and often there is a header with column headings
+separated by commas.  Something like this:
+
+    name,address,birthdate   
+    "John Smith","1800 W Old Shakopee Rd",01-JAN-2000 
+    "Jane Smith","2100 1ST Ave",01-FEB-1995  
+    "Jared Smith",3500 2ND St",01-MAR-1998      
+
+This data can be separated with the simple text splitting of "parse,"
+no fancy rules required.  
+
+To get the data, you could skip over the known heading line, but here
+is another idea.  Because REBOL is an interpreted language, it can sort
+of write itself on the fly. So we can do this with the first line of
+headings:
+
+    CSV-LINES: read/lines CSV-FILE ;; Read the file into a block of lines.
+    CSV-HEADINGS: parse/all first CSV-LINES ","
+    CSV-WORDS: copy []
+    foreach CSV-HEADING CSV-HEADINGS [
+        if not-equal? "" trim CSV-HEADING [
+            append CSV-WORDS to-word trim/all/with CSV-HEADING " #"
+        ] 
+    ]
+
+Notice that the text file is a block of lines, and we parse the first
+line.  For each parsed item, if it not a blank, we filter out spaces 
+and other problem characters, and add it to a block of words, 
+AFTER we convert it to a REBOL word (parsing will get it originally 
+as a string).  If the heading is a REBOL word, we can assign values to it.
+
+Elsewhere in the program, we can parse a data line like this:
+
+    CSV-VALUES: parse/all CSV-RECORD ","
+    CSV-VAL-COUNTER: 0
+    foreach CSV-WORD CSV-WORDS [
+        CSV-VAL-COUNTER: CSV-VAL-COUNTER + 1
+        TEMP-VAL: pick CSV-VALUES CSV-VAL-COUNTER
+        either TEMP-VAL [
+            set CSV-WORD trim TEMP-VAL ;; can only trim if it exists   
+        ] [
+            set CSV-WORD TEMP-VAL
+        ]
+    ]
+
+We break apart the data on commas, and then match the data items we
+parse, one-for-one, with the words we parsed from the heading line.
+For each heading word, we set its value to the matching data item
+parsed from the data line.
+
+For the sake of clarity, other factors are left out. For example, what
+if a data field itself contains commas. As they say in math class, the
+rest is left as an exercise. 
+
+---Parsing on something besides the usual delimiters
+
+From "Ingo" on rebolforum.com.
+
+Parse was designed to be powerful, and so the less you have to specify
+the more powerful it is.  But sometimes you want to have a little
+more control for the price of having to do a little more work.
+In this example, the string to be parsed contains a lot of the characters
+that parse splits on automatically, but in this case we don't want that.
+We want to split on the pipe character only.
+
+    REBOL [Title: "Parse test"]
+    
+    tmp: {a|bc|"d,e"|""something"more"|g} 
+    out: copy []
+    parse/all tmp [any [copy val to "|" (append out val) skip ] copy val to end (append out val)] 
+    probe out
+    halt
+
+Running the above gives the desired result:
+
+    ["a" "bc" {"d,e"} {""something"more"} "g"]
+    >>
+
+---Counting leading spaces
+
+From "Chris" on rebolforum.com
+
+Parsing can be used to find and count leading spaces in a string, by parsing
+off the leading spaces and finding the length of the resulting string, 
+as shown in this example:
+
+    REBOL [Title: "Parse test"]
+    
+    STR: "        XXXXXXXX YYYYY" 
+    BLANKS: charset " " 
+    NONBLANKS: complement BLANKS
+    
+    parse/all STR [                          
+        copy LEADING-SPACES any BLANKS 
+        copy REST-OF-STRING to end 
+    ]
+    LEADING-SPACE-COUNT: length? LEADING-SPACES
+    probe LEADING-SPACES
+    probe REST-OF-STRING
+    probe LEADING-SPACE-COUNT
+    halt
+
+The result:
+
+    "        "
+    "XXXXXXXX YYYYY"
+    8
+    >>
+
+---Dividing text on the linefeed
+
+Thanks to "sqlab" on rebolforum.com for help with this.
+
+To read text as lines, you would use the read/lines function.
+But it can happen that text comes from somewhere else such that
+you can't read/lines, but the text still is lines.  You can 
+parse it apart on the linefeed in the following way.  This example
+assumes you have some text on the clipboard.
+
+    RAW-LINES: read clipboard://
+    TEMP-LINES: parse/all RAW-LINES "^/"
+
+In the above example, TEMP-LINES would be a block of text lines.
+
+---Character type testing
+
+Normally you would want to use parsing to take apart text.
+But, the parse function also returns a true/false value if it gets to
+the end of the input and has not found any data that makes the parsing
+fail.  You can take advantage of that by using parse to answer a
+yes-or-no kind of question, as in this example.  A common function of
+checking user input is to ask if it a numeric item is indeed numeric,
+or if an alphanumeric item is indeed alphanumeric.  In this example,
+the parsing is successful if the scan of the input indicates that
+every characer is indeed "some" number, or "some" letter, or "some"
+alphanumeric character. 
+
+    REBOL [Title: "Character type tests"]
+    
+    NUMERIC: charset [#"0" - #"9"]
+    ALPHABETIC: charset [#"A" - #"Z" #"a" - #"z"]
+    ALPHANUMERIC: union ALPHABETIC NUMERIC 
+    
+    STR: "12345" 
+    print [STR ":"]
+    print ["Numeric: " parse STR [some NUMERIC]] 
+    print ["Alphabetic: " parse STR [some ALPHABETIC]] 
+    print ["Alphanumeric: " parse STR [some ALPHANUMERIC]] 
+    print "------------------------------"
+    
+    STR: "ABCde" 
+    print [STR ":"]
+    print ["Numeric: " parse STR [some NUMERIC]] 
+    print ["Alphabetic: " parse STR [some ALPHABETIC]] 
+    print ["Alphanumeric: " parse STR [some ALPHANUMERIC]] 
+    print "------------------------------"
+    
+    STR: "123ab" 
+    print [STR ":"]
+    print ["Numeric: " parse STR [some NUMERIC]] 
+    print ["Alphabetic: " parse STR [some ALPHABETIC]] 
+    print ["Alphanumeric: " parse STR [some ALPHANUMERIC]] 
+    print "------------------------------"
+    
+    STR: " a 1@" 
+    print [STR ":"]
+    print ["Numeric: " parse STR [some NUMERIC]] 
+    print ["Alphabetic: " parse STR [some ALPHABETIC]] 
+    print ["Alphanumeric: " parse STR [some ALPHANUMERIC]] 
+    print "------------------------------"
+    
+    halt
+
+The result:
+
+    12345 :
+    Numeric:  true
+    Alphabetic:  false
+    Alphanumeric:  true
+    ------------------------------
+    ABCde :
+    Numeric:  false
+    Alphabetic:  true
+    Alphanumeric:  true
+    ------------------------------
+    123ab :
+    Numeric:  false
+    Alphabetic:  false
+    Alphanumeric:  true
+    ------------------------------
+     a 1@ :
+    Numeric:  false
+    Alphabetic:  false
+    Alphanumeric:  false
+    ------------------------------
+    >>
+
+---COBOL word validation
+
+As a variant of the previous example, we can refine the type checking
+by testing for a more specific arrangement of characters, the COBOL
+word.  In this case, the first character must be a letter, but after
+that anything goes as long as the remaining characters are letters,
+numbers, or the hyphen separator.  If this understanding of the COBOL
+word format is outdated, the valid character set could be adjusted.
+
+    REBOL [Title: "Test for COBOL word"]
+    
+    LETTER: charset [#"A" - #"Z"] 
+    DIGIT: charset [#"0" - #"9"]
+    
+    COBOLWORD: [ 
+        1 LETTER 0 29 [LETTER | DIGIT | "-"] 
+    ] 
+    
+    ;            0        1         2         3  
+    ;            123456789012345678901234567890
+    print parse "123456"          COBOLWORD ;; should be false; starts with number
+    print parse "ABCDEF"          COBOLWORD ;; should be true; all letters
+    print parse "A-1-STEAK-SAUCE" COBOLWORD ;; should be true; starts with letter
+    print parse "4RUNNER"         COBOLWORD ;; should be false; starts with number
+    print parse "AVERAGE$"        COBOLWORD ;; should be false; invalid character
+    print parse "A----BCDE"       COBOLWORD ;; should be true; multiple - allowed
+    print parse "X"               COBOLWORD ;; should be true; single character allowed
+    print parse "A-VERY-LONG-WORD-WITH-VALID-CHAR" COBOLWORD ;;should be false; too long
+    
+    halt
+
+---Delimited substring
+
+A common programming operation is to extract from a string of characters
+some substring.  Usually it is specified by a starting position and a length
+or a starting position and an ending position, like the fifth through the
+tenth characters.  
+
+Here is a different substring operation that extracts a substring starting
+with a specified character and ending with a different specified character.
+In the example below, the input string is a file name that contains an
+address but also has other characters, specifically a leading number that
+is not part of the address and a page number marked by a hyphen that also
+is not part of the address.  We want to extract the part that is the address
+and not those other parts.  
+
+Looking at the pattern of the input, we can see that if we could extract
+from the first blank up to the hyphen, that would give us what we want.
+To make the solution more general, we will write a function that will
+let us specify any starting and ending delimiters. 
+
+    DELIMITED-SUBSTRING: func [
+        STR
+        START 
+        STOP
+        /local RESULT
+    ] [
+        RESULT: copy ""
+        parse/all STR [any [thru START copy RESULT to STOP] to end]
+        return RESULT
+    ]
+    
+    ;;Uncomment to test 
+    print DELIMITED-SUBSTRING "00510 1800 W Old Shakopee RD-P1.tif" " " "-"
+    print DELIMITED-SUBSTRING "00510 9800 PENN AVE S-P1.tif" " " "-"
+    print DELIMITED-SUBSTRING "00510_9800_PENN_AVE_S_P1.tif" " " "-"
+    halt 
+
+---Log parsing example 1
+
+Consider a log of configuration changes with lines like this:
+
+    5/11/2017 1:29 PM|10.1.223.15|10.1.223.15|May 11 13:29:19 CDT: %SYS-5-CONFIG_I: Configured from console by mrsmith on vty0 (10.1.250.78)
+
+A line like this represents some action taken by someone (mrsmith) and we want
+to report when this action was taken and by whom.  
+
+The lines are all alike, so look for the pattern.  The line is divided into
+parts by the pipe character.  Part 1 is a date and time, part 2 is some IP
+address, part 3 is an IP address, and part 4 is a message.  
+
+We can take apart each line on the pipe character, and then when we get
+that fourth part of a line, the message, we can look for the string 
+"by " the is right before the user ID, and we can look for the IP
+address of the computer where the change was made by finding what is
+between the parentheses.  
+
+In the example below, the whole log file has been read into a block of
+lines with the read/lines function.  
+
+    ID-CHAR: charset "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    foreach LINE CONFIG-LINES [
+        WS-DATE: copy ""
+        WS-SWITCH: copy ""
+        WS-IP: copy ""
+        WS-MSG: copy ""
+        WS-USERID: copy ""
+        WS-FROM: copy ""
+        set [WS-DATE WS-SWITCH WS-IP WS-MSG ] parse/all LINE "|"
+        parse/all/case WS-MSG [
+            thru " by " copy WS-USERID some ID-CHAR
+            thru "(" copy WS-FROM TO ")"
+        ]
+    ;; -- Report on WS-DATE, WS-USERID, WS-FROM, as appropriate. 
+    ]
+
+---Scanning the parts of a time value
+
+This example obtains a block of three integers from a time value,
+the hours, minutes, and seconds.  Obviously the example is taken
+from something larger that actually does something with those
+integers.
+
+    TIMESTRING: copy ""
+    TIMEBLOCK: copy []
+    TIMEPARTS: copy []
+    TIMESTRING: to-string TIMEVAL 
+    TIMEPARTS: parse/all TIMESTRING ":"
+    append TIMEBLOCK to-integer TIMEPARTS/1
+    append TIMEBLOCK to-integer TIMEPARTS/2
+    either TIMEPARTS/3 [
+        append TIMEBLOCK to-integer TIMEPARTS/3
+    ] [
+        append TIMEBLOCK 0
+    ]
+
+---Generating html from easier markup
+
+If you have seen the makedoc2 program from the rebol-dot-org script
+library, you have seen a major parse-fest.  This example is a little
+piece of that idea, simplified for instructional purposes.  
+The explanation of what is going on is in the script comments.
+
+The marked up input text is hard-coded into the program to make it
+self-contained.  The operation of parsing the text and creating 
+html is put into a function to which we pass the marked-up text.
+
+Thanks to "Chris" on rebolforum-dot-com for guidance.
+
+    REBOL []
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Demo for the purpose of trying to understand parsing.                     ]
+    ;; [                                                                           ]
+    ;; [ This demo will transform simple text with one markup item into html.      ]
+    ;; [ The one markup item is the === on one line that indicates a heading       ]
+    ;; [ at the h1 level.  The text on that line should be trimmed and surrounded  ]
+    ;; [ by the h1 tags.  The other lines of text should be divided on the         ]
+    ;; [ blank line and be surrounded by the "p" tags.                             ]
+    ;; [                                                                           ]
+    ;; [ So text like this:                                                        ]
+    ;; [                                                                           ]
+    ;; [ ===Heading 1                                                              ]
+    ;; [                                                                           ]
+    ;; [ Paragraph 1-1                                                             ]
+    ;; [                                                                           ]
+    ;; [ ===Heading 2                                                              ]
+    ;; [                                                                           ]
+    ;; [ Paragraph 2-1                                                             ]
+    ;; [                                                                           ]
+    ;; [ Should be transformed to this:                                            ]
+    ;; [                                                                           ]
+    ;; [ <h1>Heading 1</h1>                                                        ]
+    ;; [ <p>Paragraph 1-1</p>                                                      ]
+    ;; [ <h1>Heading 2</h1>                                                        ]
+    ;; [ <p>Paragraph 2-1</p>                                                      ]
+    ;; [                                                                           ]
+    ;; [ ...or something equivalent.                                               ]
+    ;; [---------------------------------------------------------------------------]
+
+    ;; -- This is the sample input data that we will parse. 
+    IN-TEXT: {
+    ===Heading one
+
+    This is a paragraph of text under heading one.
+    We would want it surrounded by the "p" tags.
+
+    This is a second paragraph
+    that should have its own set of "p" tags.
+
+    ===A second heading
+
+    The above heading would be emitted with the "h1"
+    tags.
+
+    And here is a second paragraph under the second 
+    heading just to show things are working
+    }
+
+    ;; -- This will be the parsed input data with its html tags.
+    HTML-OUT: copy ""
+
+    ; anything but newlines 
+    content: complement charset "^/" 
+
+    scan-doc: func [text [string!]][ 
+         ; parse/all for rebol 2 
+        parse/all text [ 
+            any [ 
+                newline 
+                | "===" opt " " copy part some content ( 
+                    append HTML-OUT rejoin [
+                        "<h1>"
+                        part
+                        "</h1>"
+                        newline
+                    ]
+                ) 
+                | copy part [some content any [newline some content]] ( 
+                    append HTML-OUT rejoin [
+                        "<p>"
+                        part
+                        "</p>"
+                        newline
+                    ]
+                ) 
+            ] 
+        ] 
+    ] 
+
+    ;; -- Parse IN-TEXT, mark it up, and append it to HTML-OUT.
+
+    scan-doc IN-TEXT
+
+    ;; -- Display the output and halt for probing.
+    probe HTML-OUT
+    halt 
+    
+Running the above produces this:
+
+    {<h1>Heading one</h1>
+    <p>This is a paragraph of text under heading one.
+    We would want it surrounded by the "p" tags.</p>
+    <p>This is a second paragraph
+    that should have its own set of "p" tags.</p>
+    <h1>A second heading</h1>
+    <p>The above heading would be emitted with the "h1"
+    tags.</p>
+    <p>And here is a second paragraph under the second
+    heading just to show things are working</p>
+    }
+    >>
+
+The above example went straight from the input text to some html
+output.  But taking some inspiration from the makedoc2 program
+let's try something different.  Parse the input text, but instead
+of going to html, store the parsed data in an intermediate block.
+The block will be repeating pairs of two things, an identifying
+word and a string of text identified by the word.
+
+In our case, when we parse a heading (with the three equal signs),
+we will add two items to our intermediate block. The first will be
+the word 'heading and the second will be the heading text.
+
+For other non-marked text, we will generate, for each string delimited
+by the blank line, the word 'para and the text itself.
+
+After we have parsed the input and made the temporary block, we will
+go through the temporary block and generate the html from that.
+Theoretically, structuring the code like this could allow us to
+have one module for parsing into the intermediate block, and then
+other modules for translating the intermediate block into several
+forms of output.  This appears to have been the plan behind the
+makedoc2 program.  The part that generates the html could be pulled
+out and replaced by a module that generates a pdf file, for example. 
+
+    REBOL []
+
+    ;; -- This is the sample input data that we will parse. 
+    IN-TEXT: {
+    ===Heading one
+
+    This is a paragraph of text under heading one.
+    We would want it surrounded by the "p" tags.
+
+    This is a second paragraph
+    that should have its own set of "p" tags.
+    
+    ===A second heading
+
+    The above heading would be emitted with the "h1"
+    tags.
+
+    And here is a second paragraph under the second 
+    heading just to show things are working
+    }
+
+    ;; -- This will be the parsed input data with its html tags.
+    HTML-OUT: copy ""
+
+    ;; -- This is the parsed data in an intermediate form. 
+    TEMP-STORAGE: copy []
+
+    ; anything but newlines 
+    content: complement charset "^/" 
+
+    scan-doc: func [text [string!]][ 
+         ; parse/all for rebol 2 
+         collect [ 
+             parse/all text [ 
+                 any [ 
+                     newline 
+                     | "===" opt " " copy part some content ( 
+                         keep 'heading 
+                         keep part 
+                     ) 
+                     | copy part [some content any [newline some content]] ( 
+                         keep 'para 
+                         keep part 
+                     ) 
+                 ] 
+             ] 
+         ] 
+    ] 
+
+    ;; -- Parse IN-TEXT, mark it up, and append it to HTML-OUT.
+
+    TEMP-STORAGE: scan-doc IN-TEXT
+    probe TEMP-STORAGE
+    print "-------------------------------"
+
+    foreach [TAG TEXTLINE] TEMP-STORAGE [
+        if equal? TAG 'heading [
+            append HTML-OUT rejoin [
+                "<h1>"
+                TEXTLINE
+                "</H1>" 
+                newline
+            ]
+        ]
+        if equal? TAG 'para [
+            append HTML-OUT rejoin [
+                "<p>"
+                TEXTLINE
+                "</p>" 
+                newline
+            ]
+        ]
+    ]
+
+    print HTML-OUT 
+
+    halt 
+
+Running the above script produces this result:
+
+    [heading "Heading one" para {This is a paragraph of text under heading one.
+    We would want it surrounded by the "p" tags.} para {This is a second paragraph
+    that should have its own set of "p" tags.} heading "A second heading" para {The above heading would be emitted with the "h1"
+    tags.} para {And here is a second paragraph under the second
+    heading just to show things are working}]
+    -------------------------------
+    <h1>Heading one</H1>
+    <p>This is a paragraph of text under heading one.
+    We would want it surrounded by the "p" tags.</p>
+    <p>This is a second paragraph
+    that should have its own set of "p" tags.</p>
+    <h1>A second heading</H1>
+    <p>The above heading would be emitted with the "h1"
+    tags.</p>
+    <p>And here is a second paragraph under the second
+    heading just to show things are working</p>
+    
+    >>
+
+So now, as an exercise that might or might not scale up to something 
+bigger, let's try out that idea of using the intermediate block to
+generate some other form of output.  Since we are testing on Windows,
+we will make a WORD document.  
+
+The trick we will use to make the WORD document is to generate a
+powershell script to make the WORD document, and then we would run
+the powershell script as a separate step.  Or, the REBOL script could
+call the powershell script, but sometimes the calling operation does
+not work exactly as hoped.  Here is a script that works for our small
+example.  That is, it worked with WORD 2013 in 2018.  You might get
+different results.
+
+If you copy out this script to run it yourself, you will have to
+change the file name of the powershell script, and the file name
+of the word document, in the powershell code. 
+
+    REBOL []
+
+    ;; -- This is the sample input data that we will parse. 
+    IN-TEXT: {
+    ===Heading one
+
+    This is a paragraph of text under heading one.
+    We would want it surrounded by the "p" tags.
+
+    This is a second paragraph
+    that should have its own set of "p" tags.
+
+    ===A second heading
+
+    The above heading would be emitted with the "h1"
+    tags.
+
+    And here is a second paragraph under the second 
+    heading just to show things are working
+    }
+
+    ;; -- This is the parsed data in an intermediate form. 
+    TEMP-STORAGE: copy []
+
+    ; anything but newlines 
+    content: complement charset "^/" 
+
+    scan-doc: func [text [string!]][ 
+         ; parse/all for rebol 2 
+         collect [ 
+             parse/all text [ 
+                 any [ 
+                     newline 
+                     | "===" opt " " copy part some content ( 
+                         keep 'heading 
+                         keep part 
+                     ) 
+                     | copy part [some content any [newline some content]] ( 
+                         keep 'para 
+                         keep part 
+                     ) 
+                 ] 
+             ] 
+         ] 
+    ] 
+
+    ;; -- Parse IN-TEXT, put it into the intermediate form,
+    ;; -- then use the intermediate form to generate a WORD document.
+
+    TEMP-STORAGE: scan-doc IN-TEXT
+    probe TEMP-STORAGE
+    print "-------------------------------"
+
+    ;; -- Generate the WORD document by generating a powershell script
+    ;; -- that will produce the document.  Cheating a bit.
+
+    PS-HEAD: {
+    $Word = New-Object -ComObject Word.Application
+    $Word.Visible = $True
+    $Document = $Word.Documents.Add()
+    $Selection = $Word.Selection
+    }
+
+    PS-FOOT: {
+    $Report = 'I:\ADocument.doc'
+    $Document.SaveAs([ref]$Report,[ref]$SaveFormat::wdFormatDocument)
+    $word.Quit()
+    $null = [System.Runtime.InteropServices.Marshal]::ReleaseComObject([System.__ComObject]$word)
+    [gc]::Collect()
+    [gc]::WaitForPendingFinalizers()
+    Remove-Variable word 
+    }
+
+    PS-H1: {
+    $Selection.Style = 'Title'
+    $Selection.TypeText("<%WS-H1%>")
+    $Selection.TypeParagraph()
+    }
+
+    PS-P: {
+    $Selection.Style = 'Heading 1'
+    $Selection.TypeText("<%WS-P%>")
+    $Selection.TypeParagraph()
+    }
+
+    POWERSHELL-SCRIPT: ""
+    POWERSHELL-SCRIPT-ID: %APowershellScript.ps1
+    WS-H1: ""
+    WS-P: ""
+
+    append POWERSHELL-SCRIPT rejoin [ 
+        PS-HEAD
+        newline
+    ]
+
+    foreach [TAG TEXTLINE] TEMP-STORAGE [
+        replace/all TEXTLINE newline " "
+        replace/all TEXTLINE {"} "'"
+        if equal? TAG 'heading [
+            WS-H1: copy TEXTLINE
+            append POWERSHELL-SCRIPT rejoin [
+                build-markup PS-H1
+                newline
+            ]
+        ]
+        if equal? TAG 'para [
+            WS-P: copy TEXTLINE
+            append POWERSHELL-SCRIPT rejoin [
+                build-markup PS-P
+                newline
+            ]
+        ]
+    ]
+
+    append POWERSHELL-SCRIPT rejoin [ 
+        PS-FOOT
+        newline
+    ]
+
+    write POWERSHELL-SCRIPT-ID POWERSHELL-SCRIPT
+    probe POWERSHELL-SCRIPT 
+
+    halt 
+
+Running the above script produces a powershell script that you would 
+have to run separately, plus the following console output.
+
+    [heading "Heading one" para {This is a paragraph of text under heading one.
+    We would want it surrounded by the "p" tags.} para {This is a second paragraph
+    that should have its own set of "p" tags.} heading "A second heading" para {The above heading would be emitted with the "h1"
+    tags.} para {And here is a second paragraph under the second
+    heading just to show things are working}]
+    -------------------------------
+    {
+    $Word = New-Object -ComObject Word.Application
+    $Word.Visible = $True
+    $Document = $Word.Documents.Add()
+    $Selection = $Word.Selection
+
+
+    $Selection.Style = 'Title'
+    $Selection.TypeText("Heading one")
+    $Selection.TypeParagraph()
+
+
+    $Selection.Style = 'Heading 1'
+    $Selection.TypeText("This is a paragraph of text under heading one. We would want it surrounded by the 'p' tags.")
+    $Selection.TypeParagraph()
+
+
+    $Selection.Style = 'Heading 1'
+    $Selection.TypeText("This is a second paragraph that should have its own set of 'p' tags.")
+    $Selection.TypeParagraph()
+
+
+    $Selection.Style = 'Title'
+    $Selection.TypeText("A second heading")
+    $Selection.TypeParagraph()
+
+
+    $Selection.Style = 'Heading 1'
+    $Selection.TypeText("The above heading would be emitted with the 'h1' tags.")
+    $Selection.TypeParagraph()
+
+
+    $Selection.Style = 'Heading 1'
+    $Selection.TypeText("And here is a second paragraph under the second  heading just to show things are working")
+    $Selection.TypeParagraph()
+
+
+    $Report = 'I:\ADocument.doc'
+    $Document.SaveAs([ref]$Report,[ref]$SaveFormat::wdFormatDocument)
+    $word.Quit()
+    $null = [System.Runtime.InteropServices.Marshal]::ReleaseComObject([System.__ComObject]$word)
+    [gc]::Collect()
+    [gc]::WaitForPendingFinalizers()
+    Remove-Variable word
+
+    }
+    >>
+
+---Log parsing example 2
+
+In a very specific situation nobody ever will encounter, we have a bunch
+of log files created for personal logging and time reporting.  The format
+was invented in the days of punch cards and has multi-line log entries
+delimited by lines with a dollar sign in the first position.  A need
+arose to scan several files in one operation and so a way was needed to
+parse out the individual log entries.  The details are explained in the
+sample script below which parses some hard-coded sample text.  
+
+This example has very little general-purpose value, but it does show 
+how one could parse multiple-line pieces of text if one can find some
+pattern that marks off the pieces.
+
+    REBOL []
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is a sample program from a very specific situation where a person    ]
+    ;; [ made up a format for personal log files and then after keeping logs for   ]
+    ;; [ many years wanted to go back through them and search all entries for      ]
+    ;; [ some key words.                                                           ]
+    ;; [ A log file is a text file with repetitions of entries that look like      ]
+    ;; [ thiS:                                                                     ]
+    ;; [     $ TL (service-request-number) mm/dd/yyyy (hours) (activity-code)      ]
+    ;; [      Multiple-line log text                                               ]
+    ;; [     $ ENDTL                                                               ]
+    ;; [ All we want to do is something simple; parse on "$ TL" though "$ ENDTL"   ]
+    ;; [ and pick out the text in between.  With strings of text in hand,          ]
+    ;; [ we can scan each for key words and report those we find.                  ]
+    ;; [---------------------------------------------------------------------------]
+    
+    LOG-TEXT: {
+    $ CO Monday
+    $ TL 9998 09/10/2018 7.5 MA
+     Do a little of this and that.
+     File a support case.
+    $ ENDTL
+    $ CO Tuesday
+    $ TL 9998 09/11/2018 7.5 MA
+     Do a bunch of coding.
+     Attend a meeting.
+    $ ENDTL
+    }
+
+    LOG-ENTRIES: copy []
+ 
+    parse LOG-TEXT [
+        any [thru "$ TL" copy ENTRY to "$ ENDTL" (append LOG-ENTRIES ENTRY)] to end
+    ]
+
+    probe LOG-ENTRIES 
+
+    halt
+    
+Running script produces this result.
+
+    [{ 9998 09/10/2018 7.5 MA
+     Do a little of this and that.
+     File a support case.
+    } { 9998 09/11/2018 7.5 MA
+     Do a bunch of coding.
+     Attend a meeting.
+    }]
+    >>
+    
+---Picking off a comment block
+
+Another variant of the previous idea of parsing off multi-line items,
+this example picks out a comment block from a coding language that
+uses comment blocks, in this case, T-SQL.  In the example, the front
+of the script has a comment block delimited by /* and */, AND, the
+comments are in a REBOL-readable format.  So, after we parse off the
+comment block, we can "load" it and work with the data items in the
+comment block.  We could, for example, put a comment block on each
+script in a script library, and then parse them all to build an
+index of all scripts.
+
+    REBOL []
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This sample parses off a comment block from the front of an sql script.   ]
+    ;; [ If the comment block is formatted in a r-e-b-o-l readable format,         ]
+    ;; [ data in the comment block could be used for indexing.                     ]
+    ;; [---------------------------------------------------------------------------]
+
+    SCRIPTCODE: {
+    /*
+    AUTHOR: "sww"
+    DATE-WRITTEN: 01-JAN-1900
+    DATABASE: "accela"
+    SEARCH-WORDS: [crlf]
+    REMARKS: {Replace crlf in comments.
+    }
+    */
+
+    SELECT REPLACE(ANY_COMMENTS, CHAR(13)+CHAR(10), ' ')
+    FROM dbo.TEMPSWW
+    }
+
+    COMMENTBLOCK: copy ""
+    parse/case SCRIPTCODE [thru "/*" copy COMMENTBLOCK to "*/"]
+    if greater? (length? COMMENTBLOCK) 0 [
+        AUTHOR: none
+        DATE-WRITTEN: none
+        DATABASE: none
+        SEARCH-WORDS: none
+        REMARKS: none
+        do load COMMENTBLOCK
+    ]
+
+    probe AUTHOR
+    probe DATE-WRITTEN 
+    probe DATABASE
+    probe SEARCH-WORDS
+    probe REMARKS
+
+    halt
+
+Running the above produces this:
+
+    "sww"
+    1-Jan-1900
+    "accela"
+    [crlf]
+    "Replace crlf in comments.^/"
+    >>
+
+---Parsing on non-printable characters
+
+In the area of simple text splitting, you can split on characters other
+than those you can type on a line of code.  To specify any hexadecimal
+character, use the "caret" notation as shown in the example below.
+
+In the example below, the clipboard contains the results of a query 
+from SQL Server.  The way to load the clipboard in this manner is to
+run a query specifying "results to grid."  Then right-click the results
+and "select all," then "copy with headers."  This loads the clipboard.
+Then run the sample program below.  It will ask for the base part of
+a file name, read the clipboard, parse the clipboard on the carriage
+return an linefeed characters to get lines, parse each line on the
+horizontal tab character to get fields, and then assemble a CSV file
+with the name specified.        
+    
+    REBOL [
+        Title: "Clipboard to CSV"
+        Purpose: {Get a file name from the operator, a string of lines
+        from the clipboard, and make the indicated CSV file from the
+        clipped lines.}
+    ]
+
+    CLIPBOARD-LINES: func [
+        /local CLIPSTRING LINEBLOCK
+    ] [
+        LINEBLOCK: copy []
+        CLIPSTRING: copy ""
+        CLIPSTRING: read clipboard://
+        LINEBLOCK: parse/all CLIPSTRING "^(0D)^(0A)"
+        return LINEBLOCK
+    ]
+
+    CSV-FILEID-X: none
+    CSV-FILEID: none
+    CSV-FILE: ""
+    CSV-REC: ""
+    FIELDCOUNT: 0
+    COMMACOUNTER: 0
+    CREATE-FILE: does [
+        if not CSV-FILEID-X: get-face MAIN-FILEID [
+            if equal? CSV-FILEID-X "" [
+                alert "No file ID specified"
+                exit
+            ]
+            alert "No file ID specified"
+            exit
+        ]
+        CSV-FILEID: to-file rejoin [
+            trim CSV-FILEID-X
+            ".csv"
+        ]
+        LINES: CLIPBOARD-LINES
+        foreach LINE LINES [ 
+            CSV-REC: copy "" 
+            FIELDS: copy []
+            FIELDS: parse/all LINE "^(09)" 
+            FIELDCOUNT: length? fields
+            COMMACOUNT: 0
+            foreach FIELD FIELDS [
+                append CSV-REC trim FIELD
+                COMMACOUNT: COMMACOUNT + 1
+                if lesser? COMMACOUNT FIELDCOUNT [
+                    append CSV-REC ","
+                ]
+            ]
+            append CSV-REC newline
+            append CSV-FILE CSV-REC
+        ]
+        write CSV-FILEID CSV-FILE
+        alert "Done."
+    ]
+
+    view center-face layout [
+        across
+        label "CSV filename (without the .csv)"
+        return
+        MAIN-FILEID: field 400
+        return
+        button "Create file" [CREATE-FILE]
+        button "Quit" [quit]
+    ]
+
+---Finding strings that start with something
+
+This example, which could be useful in several situations, shows a bit
+of what one is trying to accomplish with parse rules.  In the example,
+we want to identify file names that start with certain characters.
+If the file name contains those characters elsewhere besides at the
+start, we don't care.  
+
+In the parse rule, the rule can be read as meaning that the data to
+be parsed must match "CV_Permits_" at the start but then can contain
+anything else after that up to the end.
+
+Notice also that parsing might be a bit of overkill for this particular
+application since all we want to do is find "CV_Permits_" at the start
+of the name, which is done easily with the find/match function.
+
+Thanks to Chris of rebolforum.com for the guidance.
+
+    REBOL []
+
+    FILENAMES: [
+        %CV_Permits_2-1-2018.txt
+        %CV_Permits_2-4-2018.txt
+        %Log_CV_Permits_2-1-2018.txt
+        %Log_CV_Permits_2-4-2018.txt
+    ]
+
+    foreach ID FILENAMES [ 
+         if find/match ID "CV_Permits_" [ 
+             print ["Process:" ID] 
+         ] 
+    ] 
+
+    print "--------------------------------"
+
+    foreach ID FILENAMES [ 
+         if parse ID ["CV_Permits_" to end][ 
+             print ["Process:" ID] 
+         ] 
+    ] 
+
+    halt
+
+Here is the result of the above example.
+
+    Process: CV_Permits_2-1-2018.txt
+    Process: CV_Permits_2-4-2018.txt
+    --------------------------------
+    Process: CV_Permits_2-1-2018.txt
+    Process: CV_Permits_2-4-2018.txt
+    >>
+
+---Finding whole words in text
+
+This is an example by Christopher Ross-Gill from a code sharing site,
+located here:  
+<a href="https://gist.github.com/rgchris/1cc1d44b1b2428258c23314ed4088f6c">
+https://gist.github.com/rgchris/1cc1d44b1b2428258c23314ed4088f6c</a>
+
+It is a function to find whole words in text, instead of parts of words
+that that might match the whole word you are trying to find.  For example,
+if you are searching for "arm" you would not get a hit on "farm."
+The function is based on deciding what exactly will delimit the thing
+considered to be a "word."  
+
+In the example below, the function came from him and I wrapped it in
+a few lines for testing.  The function will return "none" if the word
+is not found, or it will return the word itself if it is found.
+
+Many thanks to him for taking the time to write the above-noted article.
+
+    Rebol [
+        Title: "Find Word"
+        Date: 28-Nov-2018
+        Author: "Christopher Ross-Gill"
+    ]
+
+    TEXT-1: {
+    The village left armed men with firearms from the army 
+    to defend the farm during warm weather.}
+
+    TEXT-2: {You left army life because you broke your left arm?}
+
+    find-word: func [ 
+        phrase [string!] term [string!] 
+        /local word non-word mark 
+    ][ 
+        word: complement non-word: charset {^/^- !"#$%&'()*+,-./:;<=>?@[]^^`{|}~} 
+        mark: none 
+
+         parse/all phrase [ 
+            any non-word 
+            some [ 
+                mark: term [non-word | end] break 
+                | 
+                (mark: none) some word some non-word 
+            ] 
+        ] 
+         mark 
+    ] 
+
+    probe find-word TEXT-1 "arm"
+    probe find-word TEXT-2 "arm"
+    probe find-word TEXT-1 "left arm"
+    probe find-word TEXT-2 "left arm"
+
+    halt  
+    
+---Removing REBOL comments at the ends of lines
+
+This is an example from here:
+
+<a href="http://re-bol.com/data-management-apps-with-rebol.html">
+http://re-bol.com/data-management-apps-with-rebol.html</a>
+
+A helpful explanation of what is going on is here:
+
+<a
+href="http://rebolforum.com/index.cgi?f=printtopic&topicnumber=45&archiveflag=new">
+http://rebolforum.com/index.cgi?f=printtopic&topicnumber=45&archiveflag=new</a>
+
+It removes comments from REBOL code in the situation where the
+comment starts with a semicolon, and finishes out the line
+where it occurs.  It does not work on anything fancier, but that
+scenario covers a lot of comments.
+
+Here is the code, packaged into a script you could run to test.
+
+    REBOL []
+
+    CODE: {
+    Owner_Name: ""     ;; A 
+    Co-Owner_Name: ""  ;; B 
+    Mail_Address_1: "" ;; C 
+    Mail_Address_2: "" ;; D 
+    In_care_of: ""     ;; E 
+    City: ""           ;; F 
+    State: ""          ;; G 
+    Country: ""        ;; H 
+    Zip: ""            ;; I 
+    }
+
+    parse/all code [
+        any [
+            to #";" begin: 
+            to newline ending: (remove/part begin ((index? ending) - (index? begin))) 
+            :begin
+        ]
+    ] 
+
+    write %uncommented.txt CODE
+    editor CODE  ; all comments removed
+
+The keyword "any" prevents the parse from stopping at the first comment.
+
+The first "to" rule brings the parsing to the first semicolon, and then sets
+the variable "begin" to point to that location.
+
+The next "to" parses to the end of the line (but not through it) and sets
+the variable "ending" to point to that location.
+
+With the start and end of the comment marked, the executable code in the
+parentheses removes the part of the line pointed to by "begin" and for a
+number of characters calculated by the end position minus the start
+position, which is the length of the comment.
+
+The "colon-begin" has the effect of setting the parse to continue from
+the spot where you cut off characters, which is the start of the comment
+you just removed.
+
+---Validating user input
+
+This is an example from here:
+
+<a href="http://re-bol.com/data-management-apps-with-rebol.html">
+http://re-bol.com/data-management-apps-with-rebol.html</a>
+
+It is a program that shows a way to validate user input on a form,
+field by field as it is entered:
+
+    REBOL []
+ 
+    nums: charset "0123456789" 
+    alfs: charset [#"a" - #"z" #"A" - #"Z"] 
+
+    call "" ;; Without this we get the security alert. 
+
+    validate: func [
+        f 
+        rule
+    ] [
+        if not parse f/text rule [
+            attempt [ 
+                insert s: open sound:// load %/c/windows/media/chord.wav 
+                wait s 
+                close s
+            ]
+        ]
+    ] 
+
+    view layout [ 
+      f1: field "12345678" [validate face [8 nums]] 
+      field "1234" [validate face [4 nums]] 
+      field "(555)123-2345" [validate face ["(" 3 nums ")" 3 nums "-" 4 nums]]
+      field "me@url.com" [validate face [some alfs "@" some alfs "." 3 alfs]]
+      do [focus f1] 
+    ]
+     
+
+This example show show you can use parsing to validate user input,
+and it also shows a neat feature of REBOL where you can pass to 
+functions various components of the program.
+
+In the layout, when an input field is exited with the "enter" key,
+the code block associated with that field is executed.  What that
+code does is pass that field (referred to by the keyword "face")
+plus the code block of parse rules, to the "validate" function.
+The "validate" function parses the text attribute of the field
+using the rules that were passed to it, and if the parsing gets
+all the way to the end of the data to return a "true" result,
+all is well, but if the parsing fails, then the function makes a
+sound.  The sound is made using one of the Windows sounds.  
+The attempt to play the sound is put into an "attempt" block so that
+if the sound can't be played for some reason, the program will
+continue without crashing on an error.  
+
+As a bit of a side note, the "call" function with the empty string
+is needed to suppress the REBOL security message every time the
+program tries to access the sound file.  It accomplishes this by
+forcing the program to raise the security alert when it starts, 
+so it won't have to do it again.  If you were to start the program
+in some other manner where you could suppress the security alert,
+such as with a DOS batch file, then the "call" would not be
+needed. 
+    
+---Parsing some Python
+
+This example comes from an environment where REBOL and Python both
+were used.  For ease of maintenance it was desired to put ODBC
+connection strings in only one place so they would not have to be
+copied and pasted into many programs, with the obvious problems that
+would cause if user ID's or passwords changed.  What worked was to
+store them in Python syntax so that the Python code could be used
+with the "import" command.  Then, to use them in REBOL, the lines
+of Python code were parsed, as shown in the examples below.
+
+To make this scheme work, some discipline is necessary.  The connection
+strings must be named, as shown below, and stored in a file with one
+item per line, as shown below.  There should be no spaces around the
+"equal" sign that separates the name from the connection string.
+This does work for Python; spaces around the "equal" sign actually
+are not needed, at least in Python 2. 
+
+Also, the lines of Python code must be just the connection strings
+as shown below.  There should be no other code, no blank lines,
+no comments, no nothing.   
+
+Interestingly, my reading of the parsing documentation indicates
+that the first example below, parsing on the equal sign, should
+not really work because it should parse on all the equal signs
+and not just the first.  But it does seem to work, so that's good.
+If it would happen not to work, we still could parse each line
+and break on just the first equal sign, as shown in the second 
+example.  
+
+The examples below are the same except for the method of breaking
+apart the file of connection strings.  Also in the examples are
+some samples of functions that could be useful for reading ODBC
+databases.  With the connection strings for several databases in
+one file, it is possible to have just one function to open a
+database connection, and pass to that function the name of the
+ODBC connection.  In other words, you don't have to have a separate
+function for each database, which saves coding.
+
+Example 1.  Parse the file as if it were one big string. 
+
+    REBOL [
+        Title:  "General ODBC functions"
+        Purpose: {Isolate ODBC connection strings for easy maintenance.
+        Store them in a format such that they can be a Python module
+        and still be used by a REBOL program.}
+    ]
+
+    ;; -- This is a demo. These will be stored in a file.
+    ;; -- The file will be read into a big string named ODBC-CONNECTIONS with
+    ;; -- the "read" function. 
+    ODBC-CONNECTIONS: 
+    {DB1_DBCONNECT="DRIVER={SQL Server};SERVER={SERVER1};DATABASE=DB1;UID=user1;PWD=password1"
+    DB2_DBCONNECT="DRIVER={SQL Server};SERVER={SERVER2};DATABASE=DB2;UID=user2;PWD=password2"
+    DB3_DBCONNECT="DRIVER={SQL Server};SERVER={SERVER3};DATABASE=DB3;UID=user3;PWD=password3"
+    DB4_DBCONNECT="DRIVER={SQL Server};SERVER={SERVER4};DATABASE=DB4;UID=user4;PWD=password4"
+    DB5_DBCONNECT="DRIVER={SQL Server};SERVER={SERVER5};DATABASE=DB5;UID=user5;PWD=password5"}
+
+    ;; -- Divide the whole string into pieces based on the first "equal" sign
+    ;; -- and the end of each line.
+    ;; -- Big question:  Why does this NOT break on the "equal" signs within each
+    ;; -- connection string.  My reading of the documentation indicates it should,
+    ;; -- although I am happy it does not.
+    ODBC-CONNECTIONLIST: parse/all ODBC-CONNECTIONS "=^/"
+
+    ;; -- Given a connection name, get the connection string and open 
+    ;; -- an ODBC connection.
+    ODBC-OPEN: func [
+        ODBC-CONNECTIONNAME
+        /local ODBC-CONNECTSTRING
+    ] [
+        ODBC-CONNECTIONSTRING: select ODBC-CONNECTIONLIST ODBC-CONNECTIONNAME
+        ODBC-CON: open [
+            scheme: 'odbc
+            target: ODBC-CONNECTIONSTRING
+        ]
+        ODBC-CMD: first ODBC-CON
+    ]
+
+    ;; -- Submit an SQL script and return the result set.
+    ODBC-EXECUTE: func [
+        ODBC-SQL
+    ] [
+        insert ODBC-CMD ODBC-SQL
+        return copy ODBC-CMD
+    ]
+
+    ;; -- Close the ODBC connection.
+    ODBC-CLOSE: does [
+        close ODBC-CMD
+    ]
+
+    ;; -- Test the parsing
+    foreach [NAME CONSTRING] ODBC-CONNECTIONLIST [
+        print [mold NAME ":" mold CONSTRING]
+    ]
+    halt
+
+Example 2. Parse the file as if it were a file of lines and each line
+must be parsed separately. 
+
+    REBOL [
+        Title:  "General ODBC functions"
+        Purpose: {Isolate ODBC connection strings for easy maintenance.
+        Store them in a format such that they can be a Python module
+        and still be used by a REBOL program.}
+    ]
+
+    ;; -- This is a demo. These will be stored in a file.
+    ;; -- The file will be read into a block named ODBC-CONNECTIONS with
+    ;; -- the "read/lines" function 
+    ODBC-CONNECTIONS: [ 
+    {DB1_DBCONNECT="DRIVER={SQL Server};SERVER={SERVER1};DATABASE=DB1;UID=user1;PWD=password1"}
+    {DB2_DBCONNECT="DRIVER={SQL Server};SERVER={SERVER2};DATABASE=DB2;UID=user2;PWD=password2"}
+    {DB3_DBCONNECT="DRIVER={SQL Server};SERVER={SERVER3};DATABASE=DB3;UID=user3;PWD=password3"}
+    {DB4_DBCONNECT="DRIVER={SQL Server};SERVER={SERVER4};DATABASE=DB4;UID=user4;PWD=password4"}
+    {DB5_DBCONNECT="DRIVER={SQL Server};SERVER={SERVER5};DATABASE=DB5;UID=user5;PWD=password5"}
+    ]
+
+    ;; -- Parse each line on the first "equal" sign, dividing each line into two
+    ;; -- parts.  Append the two parts to the accumulation of connection names
+    ;; -- and strings.  
+    ODBC-CONNECTIONLIST: copy []
+    foreach ODBC-LINE ODBC-CONNECTIONS [
+        ODBC-NME: copy ""
+        ODBC-STR: copy ""
+        parse/all ODBC-LINE [
+            copy ODBC-NME to "="
+            skip
+            copy ODBC-STR to end
+        ]
+        append ODBC-CONNECTIONLIST ODBC-NME
+        append ODBC-CONNECTIONLIST ODBC-STR
+    ]
+
+    ;; -- Given a connection name, get the connection string and open 
+    ;; -- an ODBC connection.
+    ODBC-OPEN: func [
+        ODBC-CONNECTIONNAME
+        /local ODBC-CONNECTSTRING
+    ] [
+        ODBC-CONNECTIONSTRING: select ODBC-CONNECTIONLIST ODBC-CONNECTIONNAME
+        ODBC-CON: open [
+            scheme: 'odbc
+            target: ODBC-CONNECTIONSTRING
+        ]
+        ODBC-CMD: first ODBC-CON
+    ]
+
+    ;; -- Submit an SQL script and return the result set.
+    ODBC-EXECUTE: func [
+        ODBC-SQL
+    ] [
+        insert ODBC-CMD ODBC-SQL
+        return copy ODBC-CMD
+    ]
+
+    ;; -- Close the ODBC connection.
+    ODBC-CLOSE: does [
+        close ODBC-CMD
+    ]
+
+    ;; -- Test the parsing
+    foreach [NAME CONSTRING] ODBC-CONNECTIONLIST [
+        print [mold NAME ":" mold CONSTRING]
+    ]
+    halt
+    
+Example 3.  Off-topic a bit, as an added bonus, if the idea of a central
+file of connection strings does not meet security protocols, it is easy
+to obscure them a bit with base-64 encoding.  Get a REBOL command prompt
+and enter a command like this:
+
+    write clipboard:// enbase/base (connection-string) 64
+
+and then paste the clipboard over the connection string in the file,
+as in the example.  
+
+    REBOL [
+        Title:  "General ODBC functions"
+        Purpose: {Isolate ODBC connection strings for easy maintenance.
+        Store them in a format such that they can be a Python module
+        and still be used by a REBOL program.}
+    ]
+
+    ;; -- This is a demo. These will be stored in a file.
+    ;; -- The file will be read into a block named ODBC-CONNECTIONS with
+    ;; -- the "read/lines" function 
+    ODBC-CONNECTIONS: [ 
+    {DB1_DBCONNECT="RFJJVkVSPXtTUUwgU2VydmVyfTtTRVJWRVI9e1NFUlZFUjF9O0RBVEFCQVNFPURCMTtVSUQ9dXNlcjE7UFdEPXBhc3N3b3JkMQ=="}
+    {DB2_DBCONNECT="RFJJVkVSPXtTUUwgU2VydmVyfTtTRVJWRVI9e1NFUlZFUjJ9O0RBVEFCQVNFPURCMjtVSUQ9dXNlcjI7UFdEPXBhc3N3b3JkMg=="}
+    {DB3_DBCONNECT="RFJJVkVSPXtTUUwgU2VydmVyfTtTRVJWRVI9e1NFUlZFUjN9O0RBVEFCQVNFPURCMztVSUQ9dXNlcjM7UFdEPXBhc3N3b3JkMw=="}
+    {DB4_DBCONNECT="RFJJVkVSPXtTUUwgU2VydmVyfTtTRVJWRVI9e1NFUlZFUjR9O0RBVEFCQVNFPURCNDtVSUQ9dXNlcjQ7UFdEPXBhc3N3b3JkNA=="}
+    {DB5_DBCONNECT="RFJJVkVSPXtTUUwgU2VydmVyfTtTRVJWRVI9e1NFUlZFUjV9O0RBVEFCQVNFPURCNTtVSUQ9dXNlcjU7UFdEPXBhc3N3b3JkNQ=="}
+    ]
+
+    ;; -- Parse each line on the first "equal" sign, dividing each line into two
+    ;; -- parts.  Append the two parts to the accumulation of connection names
+    ;; -- and strings.  
+    ODBC-CONNECTIONLIST: copy []
+    foreach ODBC-LINE ODBC-CONNECTIONS [
+        ODBC-NME: copy ""
+        ODBC-STR: copy ""
+        parse/all ODBC-LINE [
+            copy ODBC-NME to "="
+            skip
+            copy ODBC-STR to end
+        ]
+        append ODBC-CONNECTIONLIST ODBC-NME
+        append ODBC-CONNECTIONLIST to-string debase/base trim/with ODBC-STR {"} 64
+    ]
+
+    ;; -- Given a connection name, get the connection string and open 
+    ;; -- an ODBC connection.
+    ODBC-OPEN: func [
+        ODBC-CONNECTIONNAME
+        /local ODBC-CONNECTSTRING
+    ] [
+        ODBC-CONNECTIONSTRING: select ODBC-CONNECTIONLIST ODBC-CONNECTIONNAME
+        ODBC-CON: open [
+            scheme: 'odbc
+            target: ODBC-CONNECTIONSTRING
+        ]
+        ODBC-CMD: first ODBC-CON
+    ]
+
+    ;; -- Submit an SQL script and return the result set.
+    ODBC-EXECUTE: func [
+        ODBC-SQL
+    ] [
+        insert ODBC-CMD ODBC-SQL
+        return copy ODBC-CMD
+    ]
+
+    ;; -- Close the ODBC connection.
+    ODBC-CLOSE: does [
+        close ODBC-CMD
+    ]
+
+    ;; -- Test the parsing
+    foreach [NAME CONSTRING] ODBC-CONNECTIONLIST [
+        print [mold NAME ":" mold CONSTRING]
+    ]
+    halt
+   
+---Parsing SQL AS keywords
+
+If one is willing to be disciplined and write SQL queries with the "as" 
+feature on all selected column names, whether needed or not, then one
+could in theory parse the SQL to obtain all the column names.
+This could be useful for various automated processes related to the
+submitting of SQL queries and the reporting of the results.
+
+Here is a script that does that in a "third generation" way.  
+It takes an SQL script with "as" specified for each selected column,
+and returns a block of the column names.  It uses "parse" to divide
+the SQL into strings, and then loops through the strings looking for
+"as."  As long as "as" appears before "from" we assume that the string
+after "as" is a column name.
+
+    REBOL [
+        Title: "SQL AS scanner"
+        Purpose: {Scan all the "as (column-name)" items from SQL that has been
+        carefully written to include the "as" option for all selected columns.}
+    ]
+
+    SQL-CMD: {
+    select 
+    COLUMN1 as COLUMN1
+    ,COLUMN2 as COLUMN2 
+    ,COLUMN3 as 'COLUMN3'
+    ,COLUMN4 AS 'COLUMN4'
+    from TABLE1 as T1
+    inner join TABLE2 AS T2
+    on T1.COLUMN1 = T2.COLUMN1
+    order by COLUMN1
+    }
+
+    COLNAMES: []
+    
+    ;; The result of this parsing should be:
+    ;; COLNAMES: ["COLUMN1" "COLUMN2" "COLUMN3" "COLUMN4"] 
+
+    ;; Here is the "brute force way" familiar to 3GL programmers:
+
+    WORDS: parse SQL-CMD none
+    LGH: length? WORDS
+    POS: 1
+    while [POS < LGH] [
+        if equal? "from" pick WORDS POS [
+            break
+        ]
+        either equal? "as" pick WORDS POS [
+            POS: POS + 1
+            append COLNAMES trim/with pick WORDS POS "'"
+            POS: POS + 1
+        ] [
+            POS: POS + 1
+        ]
+    ]
+
+    ;;Uncomment to test
+    probe COLNAMES 
+    halt
+
+Here is a second example using a parse rule to explain what is expected
+in the SQL and take apart the SQL based on the rule.  This example comes
+from an anonymous helpful person on rebolforum.com.
+
+    REBOL [
+        Title: "SQL AS scanner"
+        Purpose: {Scan all the "as (column-name)" items from SQL that has been
+        carefully written to include the "as" option for all selected columns.}
+    ]
+
+    SQL-CMD: {
+    select 
+    COLUMN1 as COLUMN1
+    ,COLUMN2 as COLUMN2 
+    ,COLUMN3 as 'COLUMN3'
+    ,COLUMN4 AS 'COLUMN4'
+    from TABLE1 as T1
+    inner join TABLE2 AS T2
+    on T1.COLUMN1 = T2.COLUMN1
+    order by COLUMN1
+    }
+
+    COLNAMES: []
+
+    ;; The result of this parsing should be:
+    ;; COLNAMES: ["COLUMN1" "COLUMN2" "COLUMN3" "COLUMN4"] 
+
+    ;; Here is the "REBOL way" with parsing:
+
+    colchar: charset [#"0" - #"9" #"A" - #"Z" #"a" - #"z" ] 
+    blanks: charset [" '"] 
+  
+    parse/all SQL-CMD [ 
+        some    [ 
+            [ "from" to end ] 
+            | ["as" some blanks copy col some colchar (append COLNAMES col) ] 
+            | skip 
+        ] 
+    ]
+
+    ;;Uncomment to test
+    probe COLNAMES 
+    halt
+
+---Dissecting and reassembling a file path
+
+This example arose from a need to assemble a list of directories,
+and then check to see if those same directories existed in another
+place in the file system.  To check that, we had to chop off the
+first few nodes of a directory name, then attach a few new nodes
+on the front and check for the existence of that newly-formed
+path.  To cut off nodes from the front, we parsed the path name
+into nodes based on the slash, removed the first few nodes,
+and then strung the remaining ones back together.  That is a nice
+clean operation that could be useful, so we packaged it into a
+function.
+
+    REBOL [
+        Title: "Remove front nodes of a file path"
+        Purpose: {Given a full path file name, cut off a given
+        number of the leading nodes, returning the remainder.}
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is a very simple and very specific function for a very specific      ]
+    ;; [ project.   The project was to check a massive movement of one folder of   ]
+    ;; [ files to another location, keeping the same directory structure.          ]
+    ;; [ It was like snipping off a branch of a direcory "tree" and grafting it    ]
+    ;; [ onto a new branch.  We wanted to make sure nothing got lost in the        ]
+    ;; [ transfer. Part of that was to generate the full path names of the old     ]
+    ;; [ folders at the new location.                                              ]
+    ;; [ This function takes one full path name, plus an integer, and cuts off     ]
+    ;; [ the given number (specified by that integer) of nodes from the front,     ]
+    ;; [ returning what is left.  Then, we attach "what is left" to the NEW        ]
+    ;; [ folder location to get the full path of that directory in its new home,   ]
+    ;; [ and we can do things like check to see if it exists, check how many       ]
+    ;; [ files are in it, and so on.                                               ]
+    ;; [ For example, we might have a folder like this:                            ]
+    ;; [     /H/UTILBIL_OLD/@PHONE CALL LOG/03 MAR/2017/8760/                      ]
+    ;; [ and that folder was copied to some place like this:                       ]
+    ;; [     /NEWSERVER/UTILBIL/@PHONE CALL LOG/03 MAR/2017/8760/                  ]
+    ;; [ We would want to take the path name from the old location and chop off    ]
+    ;; [ the first two nodes, the /H/UTILBIL_OLD/, leaving the remainder,          ]
+    ;; [ @PHONE CALL LOG/03 MAR/2017/8760/, then attach to the front of that       ]
+    ;; [ "remainder" the new location, /NEWSERVER/UTILBIL/, to generate a new      ]
+    ;; [ path name for the folder in its new location.                             ]
+    ;; [ This function does not do any error checking.  To use it, you would       ]
+    ;; [ have to be familiar with your data and know how many nodes to chop off    ]
+    ;; [ for your specific situation.                                              ]
+    ;; [---------------------------------------------------------------------------]
+
+    DEPATH: func [
+        DIRECTORY
+        REMOVECOUNT
+        /local NODES PARTIALPATH
+    ] [
+        NODES: copy []
+        NODES: parse/all trim DIRECTORY "/"
+        loop REMOVECOUNT [
+            remove NODES 
+        ]
+        PARTIALPATH: copy ""
+        foreach NODE NODES [
+            append PARTIALPATH NODE
+            append PARTIALPATH "/"
+        ]
+        return to-file PARTIALPATH
+    ]
+
+    ;;Uncomment to test
+    ;FOLDERNAMES: [
+    ;    "/H/UTILBIL_OLD/@PHONE CALL LOG/03 MAR/2017/8760/"
+    ;    "/H/UTILBIL_OLD/@PHONE CALL LOG/04 APR/8760 Maintenance/"
+    ;]
+    ;foreach FOLDER FOLDERNAMES [
+    ;    print DEPATH FOLDER 3
+    ;]
+    ;halt
+    
+    
+        
+    
+
+    
+            
+
