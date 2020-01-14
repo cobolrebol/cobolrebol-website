@@ -1,0 +1,815 @@
+REBOL with AdventureWorks database
+
+    Date written: 19-APR-2019
+    Date revised:
+
+    This document explores using REBOL with SQL Server through an ODBC
+    connection. The REBOL web site has documentation on this, but sometimes
+    it is helpful to see examples from someone who has certain specific
+    things. In this case, we have set up the Microsoft AdventureWorks demo
+    database and done a few things with it just to show that it can be done.
+    The fact that REBOL can work with SQL Server and other databases means
+    that REBOL could possibly be used for some applications of significant
+    size.
+
+===Target audience and references
+
+This document assumes you know how to write REBOL programs, how to write
+SQL scripts, and how to set up an ODBC connection on a Windows computer.
+I can't help you outside that narrow track.
+
+The free version of REBOL/View comes with the ability to use the ODBC
+connection.  The examples here use the free SQL Server Express Edition
+and the free Adventureworks demo database, so you can practice database
+programming at no cost in money.
+
+The REBOL database documentation is here:
+
+<a href="http://www.rebol.com/docs/database.html">
+http://www.rebol.com/docs/database.html</a>
+
+In summary, the target audience is someone who wants to find out how to
+use REBOL with SQL Server and wants a bit of a jump-start. 
+
+===Getting set up
+
+This is the fussing you have to do to get to the point where you can start
+programming.  It will be somewhat vague because things could be different
+when you are reading this.  The concepts are constant but you might have
+to hack a bit at the details.
+
+---Install SQL Express Edition
+
+A google search for "sql server express edition" or something of the sort
+should locate a Microsoft page where you can download that package.
+Downloading and installing seem pretty standard.  It comes in an exe file
+that you run as administrator.
+
+The last window of the download process has some buttons on it, and one of
+them is for downloading the SQL Server Management Studio.  Some people might
+have that already depending on their line of work.  If you have it already,
+the one you have should work.  Otherwise, you should download it and install
+it because you will need it.
+
+Also on that last window is a "connection string" followed by a button.
+Clicking that button copies the connection string to the clipboard.
+That must have been done for a reason, so open a text editor and paste
+that connection string into it and save it.  
+
+---Install the AdventureWorks database
+
+A google search for "adventureworks database" or something of the sort
+should locate a page where you can download that demo database.  It seems
+that there are three parts.  The only part used in this document is the
+database, which should be present in a file with suffix dot-bak.
+The file with the main name ending in "dw" seems to be a data warehouse
+database that is beyond the scope of this elementary documentation, as is
+the zip file of sample sql scripts.
+
+After you have download the dot-bak file of the database, run the Server
+Management Studio. The connection you want seems to be your computer name
+followed by "\SQLEXPRESS" with Windows authentication.  When you have it
+running, use the "restore database" function to restore from the dot-bak
+file you downloaded.  Each version of the Management Studio looks a little
+different, so this document is going to assume you can handle this job
+yourself or find someone to help.  It does go smoothly if you know which
+buttons to push, so to speak.
+
+---Make an ODBC connection
+
+Go to the C:\Windows\sysWOW64 folder and run (as administrator) the
+odbcad32.exe program.  Make a system DSN of the "SQL Server" type.
+Once again, we are going to assume you are handy enough to do this.
+To be compatible with the examples here, name it "adventureworksdb"
+with Windows authentication. For the server, it seems that what is
+needed is your computer name, a backslash, and SQLEXPRESS.  In other
+words, the same name you used when you ran the Server Management Studio.
+Use the "test" button at the end to make sure it works. 
+
+---Make a REBOL connection script
+
+This step is optional, but it will save some coding later.  Copy the
+following code in a file called "adventureworksdb.r" and save it in the
+folder where you will be writing your test programs.  Those test programs
+can use this file to save a bit of coding.  
+
+    TITLE
+    Adventureworks global database procedures
+
+    SUMMARY
+    These are the procedures for the Adventureworks database that are needed no
+    matter what tables are being used.  These are procedures like opening
+    and closing the database.
+
+    DOCUMENTATION
+    Before using any tables in the Adventureworks database, it is necessary to
+    make certain connections to it.  This is hidden in procedures that make
+    using the Adventureworks database, which is in SQL Server, similar to using
+    a database through COBOL.  You "open" the database before using it and
+    "close" the database after using it.
+
+    To use these procedures:
+
+    Before using any of the other procedures that work with specific tables,
+    "open" the database with the following procedure:
+
+    ADVENTUREWORKS-OPEN
+
+    Before you exit your script, "close" the database as follows:
+
+    ADVENTUREWORKS-CLOSE
+
+    And that's all there is to do. 
+
+    SCRIPT
+    REBOL [
+        Title:  "Adventureworks database global procedures"
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ These are procedures for the Adventureworks database that are             ]
+    ;; [ used by the other procedures for the Adventureworks database tables.      ]
+    ;; [ Those are things like opening and closing the database.                   ]
+    ;; [---------------------------------------------------------------------------]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ The database might be used once, like in a CGI script, or                 ]
+    ;; [ repeatedly, like in a batch program.                                      ]
+    ;; [ To allow for batch use, the procedures that open and close the            ]
+    ;; [ file set a global flag so that it can be done only once.                  ]
+    ;; [---------------------------------------------------------------------------]
+
+    ADVENTUREWORKS-DB-IS-OPEN: false
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This procedure makes the ODBC connection, that is, it basically           ]
+    ;; [ "opens" the database (in COBOL terminology).                              ]
+    ;; [ After the database is open, things are done with/to it by                 ]
+    ;; [ means of SQL scripts.  An SQL script is passed to the database            ]
+    ;; [ by putting it into the command port, thusly:                              ]
+    ;; [     insert ADVENTUREWORKS-CMD SQL-SCRIPT                                  ]
+    ;; [ where SQL-SCRIPT is a string that contains an SQL script.                 ]
+    ;; [                                                                           ]
+    ;; [ The results of the script are in the same command port, and               ]
+    ;; [ are obtained by repeatedly taking off the first item in the               ]
+    ;; [ port, thusly:                                                             ]
+    ;; [     REC-AREA: pick ADVENTUREWORKS-CMD 1                                   ]
+    ;; [ where REC-AREA is a word that can hold the block that you                 ]
+    ;; [ picked.  When you get a result of "none," you are at the                  ]
+    ;; [ end.                                                                      ]
+    ;; [                                                                           ]
+    ;; [ Alternatively, you could get the entire result of the query by copying    ]
+    ;; [ the command port like this:                                               ]
+    ;; [     SQL-RESULT: copy ADVENTUREWORKS-CMD                                   ]
+    ;; [ SQL-RESULT would be a block, and each item in that block would be         ]
+    ;; [ another block that contains one row of the queried data.                  ]
+    ;; [---------------------------------------------------------------------------]
+
+    ADVENTUREWORKS-OPEN: does [
+        ADVENTUREWORKS-CON: open odbc://adventureworksdb
+        ADVENTUREWORKS-CMD: first ADVENTUREWORKS-CON
+        ADVENTUREWORKS-DB-IS-OPEN: true
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This procedure closes the database.                                       ]
+    ;; [---------------------------------------------------------------------------]
+
+    ADVENTUREWORKS-CLOSE: does [
+        close ADVENTUREWORKS-CMD
+        ADVENTUREWORKS-DB-IS-OPEN: false
+    ]
+    
+---Test the whole setup.
+
+With the above steps done, you should be able to write a REBOL program that
+will read the database.  We will make a simple query on a table that has
+just a small amount of data.  Copy the code below into a REBOL script file
+(ending in the dot-r) and run it.
+
+    REBOL [
+        Title: "Test adventureworks connection"
+        Purpose: {Run a simple SQL script on the Adventureworks database
+        to make sure the ODBC connection works.}
+    ]
+
+    do %adventureworksdb.r 
+
+    SQL-SCRIPT: {
+    use AdventureWorks2016CTP3
+    select
+    *
+    from HumanResources.Department 
+    }
+
+    SQL-RESULT: copy []
+
+    ADVENTUREWORKS-OPEN 
+    insert ADVENTUREWORKS-CMD SQL-SCRIPT
+    SQL-RESULT: copy ADVENTUREWORKS-CMD
+    ADVENTUREWORKS-CLOSE 
+
+    print ["SQL-RESULT is a " type? SQL-RESULT ", size " length? SQL-RESULT]
+    print ["First item in SQL-RESULT is a " type? first SQL-RESULT]
+    print "Full SQL-RESULT is:"
+    foreach REC SQL-RESULT [
+        print mold REC
+    ]
+    print "First record datatypes:"
+    foreach FIELD SQL-RESULT/1 [
+        print [mold FIELD " is type " type? FIELD]
+    ]
+
+    halt
+    
+Running the above script should produce the following result.
+
+    SQL-RESULT is a  block , size  16
+    First item in SQL-RESULT is a  block
+    Full SQL-RESULT is:
+    [1 "Engineering" "Research and Development" 30-Apr-2008/0:00]
+    [2 "Tool Design" "Research and Development" 30-Apr-2008/0:00]
+    [3 "Sales" "Sales and Marketing" 30-Apr-2008/0:00]
+    [4 "Marketing" "Sales and Marketing" 30-Apr-2008/0:00]
+    [5 "Purchasing" "Inventory Management" 30-Apr-2008/0:00]
+    [6 "Research and Development" "Research and Development" 30-Apr-2008/0:00]
+    [7 "Production" "Manufacturing" 30-Apr-2008/0:00]
+    [8 "Production Control" "Manufacturing" 30-Apr-2008/0:00]
+    [9 "Human Resources" "Executive General and Administration" 30-Apr-2008/0:00]
+    [10 "Finance" "Executive General and Administration" 30-Apr-2008/0:00]
+    [11 "Information Services" "Executive General and Administration" 30-Apr-2008/0:00]
+    [12 "Document Control" "Quality Assurance" 30-Apr-2008/0:00]
+    [13 "Quality Assurance" "Quality Assurance" 30-Apr-2008/0:00]
+    [14 "Facilities and Maintenance" "Executive General and Administration" 30-Apr-2008/0:00]
+    [15 "Shipping and Receiving" "Inventory Management" 30-Apr-2008/0:00]
+    [16 "Executive" "Executive General and Administration" 30-Apr-2008/0:00]
+    First record datatypes:
+    1  is type  integer
+    "Engineering"  is type  string
+    "Research and Development"  is type  string
+    30-Apr-2008/0:00  is type  date
+    >>
+
+If you made it through the above steps, you are ready to do some exploration
+of REBOL database programming.  If not, then you will have to hack at the
+parts to get them working.  This always is the worst part of doing things
+like this, getting the infrastructure operational.  I did it and it worked
+for me.  That's all the help I can offer.
+
+===Demo update program
+
+Here is a demo program that provides an add/change/delete program for one
+table.  The chosen table is one with only two columns besides the key
+column, just to make the programming easier.  This is a demo after all.
+
+The table has a key value that is an integer automatically assigned by
+SQL Server.  What that means is that when you add a new row, the primary
+key is the next number after the highest one assigned.  That also means
+that if you have, for example, 30 items in the table, and you delete
+number 30, and then add a new item, the new item will not re-use the
+key of 30, but will be assigned number 31.  
+
+Here is the program, which you may copy out into a script and run.
+
+    REBOL [
+        Title: "Update Person.ContactType table"
+        Purpose: {Demo add/change program for an SQL Server table.}
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is a demo program  for updating a table in the AdventureWorks        ]
+    ;; [ database.  It updates the Person.ContactType table because that table     ]
+    ;; [ has just one column besides the key.  This is a demo after all.           ]
+    ;; [ The way we will read and update a record will be to generate an SQL       ]
+    ;; [ script and submit it through the ODBC connection.  In REBOL there is      ]
+    ;; [ a way to make the "parameterized SQL" but we will generate the full       ]
+    ;; [ SQL.  The reason we will generate the full SQL is that we can log it      ]
+    ;; [ and then, if something does not work, we can look at the SQL we           ]
+    ;; [ submitted and maybe see the problem.                                      ]
+    ;; [---------------------------------------------------------------------------]
+
+    do %adventureworksdb.r
+    
+    ;; -- Function to get the year, month, and day out of a date, with leading
+    ;; -- zeros on month and day, so we can construct the ModifiedDate column
+    ;; -- in our SQL update.
+    DATE-DISSECTION: func [
+        DATEVAL
+        /local DATEBLOCK
+    ] [
+        DATEBLOCK: copy []
+        append DATEBLOCK DATEVAL/year
+        append DATEBLOCK DATEVAL/month
+        append DATEBLOCK DATEVAL/day
+        append DATEBLOCK to-string DATEVAL/year
+        either lesser? DATEVAL/month 10 [
+            append DATEBLOCK rejoin ["0" to-string DATEVAL/month]
+        ] [
+            append DATEBLOCK to-string DATEVAL/month
+        ]
+        either lesser? DATEVAL/day 10 [
+            append DATEBLOCK rejoin ["0" to-string DATEVAL/day]
+        ] [
+            append DATEBLOCK to-string DATEVAL/day
+        ]  
+        return DATEBLOCK  
+    ]
+
+    ;; -- Function to examine the Name field from the update window and
+    ;; -- block any characters besides letters and spaces.
+    ALPHAONLY: func [
+        TEXTFIELD
+        /local LETTERSONLY
+    ] [     
+        LETTERSONLY: copy ""
+        trim TEXTFIELD
+        foreach CHARACTER TEXTFIELD [
+            either find " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" CHARACTER [
+                append LETTERSONLY CHARACTER
+            ] [
+                append LETTERSONLY " "
+            ]   
+        ]
+        replace/all LETTERSONLY "  " " " ;; in case we created any double-blanks 
+        return LETTERSONLY
+    ]
+
+    ;; -- SQL models that we will tailor for specific requests.
+    SQL-LOOKUP-MODEL: {
+    use AdventureWorks2016CTP3
+    select
+    *
+    from Person.ContactType
+    where ContactTypeID = %%CONTACTTYPEID%%
+    }
+
+    SQL-UPDATE-MODEL: {
+    use AdventureWorks2016CTP3
+    update Person.ContactType 
+    set 
+    Name = '%%NAME%%',
+    ModifiedDate = '%%MODIFIEDDATE%%'
+    where ContactTypeID = %%CONTACTTYPEID%% 
+    }
+
+    ;; -- The key, ContactTypeID, is an identity field 
+    ;; -- so SQL Server will assign a value for it. 
+    SQL-INSERT-MODEL: {
+    use AdventureWorks2016CTP3
+    insert into Person.ContactType 
+    (Name, 
+    ModifiedDate)
+    values
+    ('%%NAME%%',
+    '%%MODIFIEDDATE%%')
+    }
+
+    SQL-DELETE-MODEL: {
+    use AdventureWorks2016CTP3
+    delete from Person.ContactType 
+    where ContactTypeID = %%CONTACTTYPEID%% 
+    }
+
+    SQL-CONFIRM-INSERT: {
+    use AdventureWorks2016CTP3
+    select 
+    top 1
+    ContactTypeID 
+    ,Name 
+    from Person.ContactType 
+    order by ContactTypeID desc 
+    }
+
+    ;; -- Since this is a demo, whenever we submit an SQL query we
+    ;; -- will write it to a log file so if the program crashes 
+    ;; -- during the processing of the query, we can examine the
+    ;; -- SQL we just submitted to see if that was the problem.
+    TRACEFILE-ID: %SQLtrace.txt
+
+    ;; -- We will have a separate function to validate each item
+    ;; -- on the window.  The function will set a flag to indicate
+    ;; -- if the data is present and valid, and will add appropriate
+    ;; -- messages to a message string that we will display on the
+    ;; -- window. 
+    NUMERIC: charset [#"0" - #"9"]
+    WS-MSG: ""
+    WS-TYPEID: ""
+    WS-TYPEID-IS-VALID: false
+    WS-NAME: ""
+    WS-NAME-IS-VALID: false
+    WS-TYPEID-ON-FILE: false 
+
+    ;; -- Type ID must be numeric and no longer than three digits
+    VALIDATE-TYPEID: does [
+        WS-TYPEID: copy ""
+        WS-TYPEID: get-face MAIN-TYPE
+        if equal? WS-TYPEID "" [
+            WS-TYPEID-IS-VALID: false
+            append WS-MSG rejoin ["Type ID is blank" newline]
+            exit
+        ]
+        trim WS-TYPEID
+        if greater? (length? WS-TYPEID) 3 [
+            WS-TYPEID-IS-VALID: false
+            append WS-MSG rejoin ["Type ID is too long" newline]
+            exit
+        ]
+        either parse WS-TYPEID [some NUMERIC] [
+            WS-TYPEID-IS-VALID: true
+        ] [
+            WS-TYPEID-IS-VALID: false
+            append WS-MSG rejoin ["Type ID is not numeric" newline]
+        ]
+    ]
+
+    ;; -- For the Name field, rather than try to check free-form text
+    ;; -- for "correctness," we will must make sure it is not blank,
+    ;; -- and if it is not blank, we will filter out all non-alphabetic
+    ;; -- characters and chop the length to 40 characters.
+    VALIDATE-NAME: does [
+        WS-NAME: copy ""
+        WS-NAME: get-face MAIN-NAME
+        if equal? WS-NAME "" [
+            WS-NAME-IS-VALID: false
+            append WS-MSG rejoin ["Name is blank" newline]
+            exit
+        ] 
+        WS-NAME: copy/part ALPHAONLY WS-NAME 40
+        WS-NAME-IS-VALID: true
+    ]
+
+    ;; -- This function assumes that the type ID is valid
+    CHECK-EXISTENCE: does [
+        WS-TYPEID-ON-FILE: true
+        SQL-CMD: copy SQL-LOOKUP-MODEL
+        replace SQL-CMD "%%CONTACTTYPEID%%" WS-TYPEID
+        ADVENTUREWORKS-OPEN
+        insert ADVENTUREWORKS-CMD SQL-CMD
+        SQL-RESULT: copy ADVENTUREWORKS-CMD
+        ADVENTUREWORKS-CLOSE
+        if equal? (length? SQL-RESULT) 0 [
+            WS-TYPEID-ON-FILE: false
+            append WS-MSG rejoin [WS-TYPEID " not on file" newline]
+            exit
+        ]    
+    ]
+
+    ;; -- Function for the LOOKUP button
+    LOOKUP-ITEM: does [
+        WS-MSG: copy ""
+        set-face MAIN-MSG WS-MSG
+        VALIDATE-TYPEID
+        if not WS-TYPEID-IS-VALID [
+            set-face MAIN-MSG WS-MSG
+            alert "Invalid type ID; see messages"
+            exit
+        ]
+        SQL-CMD: copy SQL-LOOKUP-MODEL
+        replace SQL-CMD "%%CONTACTTYPEID%%" WS-TYPEID
+        write/append TRACEFILE-ID rejoin ["Query: " newline SQL-CMD newline]
+        ADVENTUREWORKS-OPEN
+        insert ADVENTUREWORKS-CMD SQL-CMD
+        SQL-RESULT: copy ADVENTUREWORKS-CMD
+        ADVENTUREWORKS-CLOSE
+        if equal? (length? SQL-RESULT) 0 [
+            alert rejoin [WS-TYPEID " not on file"]
+            exit
+        ]
+        set-face MAIN-NAME SQL-RESULT/1/2
+    ]
+
+    ;; -- Function for the UPDATE button
+    UPDATE-ITEM: does [
+        WS-MSG: copy "" 
+        set-face MAIN-MSG WS-MSG
+        VALIDATE-TYPEID
+        if not WS-TYPEID-IS-VALID [
+            set-face MAIN-MSG WS-MSG
+            alert "Invalid type ID; see messages"
+            exit
+        ]
+        CHECK-EXISTENCE
+        if not WS-TYPEID-ON-FILE [  
+            set-face MAIN-MSG WS-MSG
+            alert "Type ID not on file; see messages"
+            exit
+        ] 
+        VALIDATE-NAME
+        if not WS-NAME-IS-VALID [
+            set-face MAIN-MSG WS-MSG
+            alert "Name is not acceptable; see messages"
+            exit
+        ]
+        SQL-CMD: copy SQL-UPDATE-MODEL
+        set [yyyy-int mm-int dd-int yyyy-str mm-str dd-str] DATE-DISSECTION now
+        replace SQL-CMD "%%MODIFIEDDATE%%" rejoin [
+            yyyy-str "-"
+            mm-str "-"
+            dd-str
+        ]
+        replace SQL-CMD "%%NAME%%" WS-NAME
+        replace SQL-CMD "%%CONTACTTYPEID%%" WS-TYPEID
+        write/append TRACEFILE-ID rejoin ["Query: " newline SQL-CMD newline]
+        ADVENTUREWORKS-OPEN
+        insert ADVENTUREWORKS-CMD SQL-CMD
+        ADVENTUREWORKS-CLOSE
+        alert "Updated."
+    ]
+
+    ;; -- Function for the ADD button
+    ADD-ITEM: does [
+        WS-MSG: copy ""
+        set-face MAIN-MSG WS-MSG
+        VALIDATE-NAME
+        if not WS-NAME-IS-VALID [
+            set-face MAIN-MSG WS-MSG
+            alert "Name is not acceptable; see messages"
+            exit
+        ]
+        SQL-CMD: copy SQL-INSERT-MODEL
+        set [yyyy-int mm-int dd-int yyyy-str mm-str dd-str] DATE-DISSECTION now
+        replace SQL-CMD "%%MODIFIEDDATE%%" rejoin [
+            yyyy-str "-"
+            mm-str "-"
+            dd-str
+        ]
+        replace SQL-CMD "%%NAME%%" WS-NAME  
+        write/append TRACEFILE-ID rejoin ["Query: " newline SQL-CMD newline]
+        ADVENTUREWORKS-OPEN
+        insert ADVENTUREWORKS-CMD SQL-CMD
+        ADVENTUREWORKS-CLOSE
+    ;; -- For some unknown reason, the confirmation scheme below returned
+    ;; -- an ODBC error about "changing contexts."  But, if I put in the
+    ;; -- print statements to debug it, it worked.  So I guessed at some
+    ;; -- sort of timing issue and put in the "wait" function, and then
+    ;; -- it worked.  I don't know enough about ODBC to know what is going on.
+        wait 0
+    ;   print "preparing"
+        SQL-CMD: copy SQL-CONFIRM-INSERT
+    ;   print "tracing"
+        write/append TRACEFILE-ID rejoin ["Query: " newline SQL-CMD newline]
+    ;   print "opening"
+        ADVENTUREWORKS-OPEN  
+    ;   print "inserting"
+        insert ADVENTUREWORKS-CMD SQL-CMD
+    ;   print "copying"
+        SQL-RESULT: copy ADVENTUREWORKS-CMD
+    ;   print "closing"
+        ADVENTUREWORKS-CLOSE
+    ;   print "alerting"
+        alert rejoin [
+            "Type "
+            to-string SQL-RESULT/1/1
+            " added."
+        ]
+    ]
+
+    ;; -- Function for the DELETE button
+    DELETE-ITEM: does [
+        WS-MSG: copy ""
+        set-face MAIN-MSG WS-MSG
+        VALIDATE-TYPEID
+        if not WS-TYPEID-IS-VALID [
+            set-face MAIN-MSG WS-MSG
+            alert "Invalid type ID; see messages"
+            exit
+        ]
+        CHECK-EXISTENCE
+        if not WS-TYPEID-ON-FILE [  
+            set-face MAIN-MSG WS-MSG
+            alert "Type ID not on file; see messages"
+            exit
+        ] 
+        SQL-CMD: copy SQL-DELETE-MODEL
+        replace SQL-CMD "%%CONTACTTYPEID%%" WS-TYPEID
+        write/append TRACEFILE-ID rejoin ["Query: " newline SQL-CMD newline]
+        ADVENTUREWORKS-OPEN
+        insert ADVENTUREWORKS-CMD SQL-CMD
+        ADVENTUREWORKS-CLOSE
+        alert "Deleted."
+
+    ]
+    
+    MAIN-WINDOW: layout [
+        across
+        banner "Contact Type Table"
+        return
+        label "Contact type"
+        MAIN-TYPE: field 40
+        button 80 "Lookup" [LOOKUP-ITEM]
+        return
+        bar 400
+        return
+        label "Name"
+        MAIN-NAME: field 300
+        return
+        bar 400
+        return
+        button 80 "Update" [UPDATE-ITEM]
+        button 80 "Add" [ADD-ITEM]
+        button 80 "Quit" [quit]
+        button 80 "Debug" [halt]
+        button 60 red "Delete" [DELETE-ITEM]
+        return
+        MAIN-MSG: info 400x100
+    ]
+
+    view center-face MAIN-WINDOW
+
+===Demo report program
+
+For another demo of a common database operation, here is a program that
+produces a report from a database view.  What does it actually mean in
+REBOL to "produce a report."  In the more paper-heavy days, that would
+mean printing stuff on paper, sometimes lots of it.  REBOL is not so
+good at that operation, so we must come up with other methods.  In this
+demo, we will format the results of a database query with appropriate
+HTML markup to make a file that can be viewed in a web browser.
+If a person were to want it on actual paper, then he could use the 
+browser's printing capabilites to accomplish that.
+
+This sample program is going to use another separate file of REBOL
+code that is brought into the program with the "do" function.  The 
+reason we do this is that this separate code is somewhat general-purpose
+and could be used in other programs.  So, if you can encapsulate such
+general-purpose code into its own file, then you can use it in other
+programs to save yourself some work.
+
+What this separate file does is provide a function that will take a
+block of blocks and format it into an HTML table.  Each of the sub-blocks
+will be a row in the table.  If an appropriate refinement is used, the
+function will treat the first sub-block as a block of header text items
+and wrap those in the "th" tag instead of the "td" tag.  
+
+The reason this function is useful is that its expected input, a block
+of blocks, is just what you get back from an SQL query submitted through
+the REBOL ODBC interface.  That means you can launch a query, get the
+result, and feed the result right into the above function to get all
+the data wrapped up in HTML code.
+
+Here is that helper function.  Copy it out of here and save it as
+HtmlTableOfResultset.r.  That is the name coded into the main program
+you will see later.
+
+    REBOL [
+        Title: "Result-set to html table"
+        Purpose: {Given an SQL result set, which comes in the form of
+        a block of blocks, generate an html table that can be inserted
+        into a larger html page.}
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is a specialized help function for the specific job of reporting     ]
+    ;; [ the results of an SQL query.  The result-set of an SQL query comes in     ]
+    ;; [ the form of a block of blocks, where each sub-block is a row of the       ]
+    ;; [ result-set.  This function makes an html table, from the <table> tag      ]
+    ;; [ through the </table> tag, with each row being one row of the result-set.  ]
+    ;; [ The planned use of this function would be to generate chunks of html      ]
+    ;; [ that would be assembled into a larger page.                               ]
+    ;; [ The function includes a refinement to cause the first row to be emitted   ]
+    ;; [ as a table header.                                                        ]
+    ;; [---------------------------------------------------------------------------]
+
+    HTML-TABLE-OF-RESULT-SET: func [
+        ROWBLOCK
+        /HEADER
+        /local HTMLTABLE FIRSTROW
+    ] [
+        HTMLTABLE: copy ""
+        FIRSTROW: false
+        if HEADER [
+            FIRSTROW: true
+        ]
+        append HTMLTABLE rejoin [
+            {<table width="100%" border="1">}
+            newline
+        ]
+        foreach ROW ROWBLOCK [
+            append HTMLTABLE rejoin ["<tr>" newline]
+            foreach COL ROW [
+                either FIRSTROW [
+                    append HTMLTABLE rejoin [
+                        "<th>"
+                        COL
+                        "</th>"
+                        newline
+                    ]
+                ] [
+                    append HTMLTABLE rejoin [
+                        "<td>"
+                        COL
+                        "</td>"
+                        newline
+                    ]
+                ]              
+            ]
+            FIRSTROW: false
+            append HTMLTABLE rejoin ["</tr>" newline]
+        ]
+        append HTMLTABLE rejoin [
+            {</table>}
+            newline
+        ]
+        return HTMLTABLE
+    ]
+    
+With the above file created, you can run the main program below.
+Note that it is going to create a file, so you might scan the code
+to made sure there are not file name conflicts, and that you have
+rights to write to the directory where you are running the program.
+
+    REBOL [
+        Title: "Report vendor names and addresses alphabetical by name"
+        Purpose: {Demo program to list vendors using a provided view.}
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Using a view in the Adventureworks database, list the data provided       ]
+    ;; [ by the view, with the modification of sorting by vendor name.             ]
+    ;; [ How should we "report" it?  In this case, we will make a web page,        ]
+    ;; [ that is, a file with html markup that we could read in a web browser.     ]
+    ;; [---------------------------------------------------------------------------]
+
+    do %adventureworksdb.r
+    do %HtmlTableOfResultset.r
+
+    ;; -- This is the file we will create for the report.
+    HTML-FILE-ID: %VendorListAlphabetical.html
+    HTML-FILE-TEXT: ""
+
+    ;; -- These are the HTML parts we will assemble into the final report,
+    ;; -- along with the table of detail lines created by the function in
+    ;; -- HtmlTableOfResultset module above.
+    HTML-HEAD: {<html>
+    <head>
+    <title>Vendor List Alphabetical</title>
+    </head>
+    <body>
+    <h1>Vendor List Alphabetical</h1>
+    }
+    HTML-FOOT: {
+    </body>
+    </html>
+    }
+
+    ;; -- These are the column headings we will put in the table.
+    COLHEADS: [
+        "Name"
+        "Vendor ID"
+        "Address type"
+        "Address line 1"
+        "Address line 2"
+        "City"
+        "State/Province"
+        "Postal code"
+        "Country/Region"
+    ]
+
+    ;; -- This is the SQL we wil submit to the ODBC connection to get data.
+    SQL-CMD: {
+    use AdventureWorks2016CTP3
+    select
+    Name 
+    ,BusinessEntityID 
+    ,AddressType 
+    ,AddressLine1 
+    ,isnull(AddressLine2, '') as 'AddressLine2' 
+    ,City 
+    ,StateProvinceName 
+    ,PostalCode 
+    ,CountryRegionName 
+    from Purchasing.vVendorWithAddresses
+    order by Name 
+    }
+
+    ;; -- Begin
+    append HTML-FILE-TEXT HTML-HEAD
+    ADVENTUREWORKS-OPEN
+    insert ADVENTUREWORKS-CMD SQL-CMD
+    SQL-RESULT: copy ADVENTUREWORKS-CMD
+    ADVENTUREWORKS-CLOSE 
+    insert/only SQL-RESULT COLHEADS
+    append HTML-FILE-TEXT HTML-TABLE-OF-RESULT-SET/HEADER head SQL-RESULT
+    append HTML-FILE-TEXT HTML-FOOT
+    write HTML-FILE-ID HTML-FILE-TEXT
+    browse HTML-FILE-ID
+    
+===Concluding note
+
+This document is not meant to be any sort of training manual for using
+REBOL, ODBC, and SQL Server.  SQL Server changes, and REBOL is somewhat
+dead, so this is meant to be enough to get you going if you want to try
+those features.  What one normally experiences when trying to get things
+of this nature operating is a certain amount of head-beating as nothing
+works as expected or documented.  The above examples were tested where
+they were written, but your mileage may vary as they say. 
+        
+You definitely should read the official documentation noted at the
+beginning of this document.  This article is not a replacement for
+that.  What this article provides is some concrete examples using some
+real data.  It is like a little jump-start to get you going on 
+trying database programming.
+    
+    
+    
+

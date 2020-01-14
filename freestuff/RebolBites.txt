@@ -1,0 +1,1355 @@
+REBOL Bites
+
+    This documentation fills in a blank space between two other kinds of 
+    documentation.  One kind is the general documentation that explains
+    how REBOL works.  An example of that would be the REBOL/Core User Manual.
+    The other kind is the specific documentation that explains how the
+    individual functions work.  An example of that would be the function
+    dictionary.  One is the forest, the other is the trees.
+
+    This document fits between.  It is...the REBOL cookbook:
+
+    So how does this document differ from the official cookbook
+    on the REBOL web site?  In the following ways:
+
+    It tries to group things for easy visual searching.
+
+    It tries to present code samples in ways that could be copied out of this
+    document and pasted directly in to programs.  You might want to change
+    some words to match naming conventions in your program, but the code as
+    presented would work if copied and pasted.
+
+    There are some notes that are not code samples, but just information that
+    seems helpful.
+
+    Some recipes from the official cookbook are included, and notes are added
+    if anything seems unclear.
+
+    And finally, the document includes a little "code snippet manager" that
+    you may copy out and use to store the included code samples as well as
+    any of your own. 
+
+===The target audience
+
+The target audience for this document is someone in one of the following
+groups.
+
+*Those who are learning REBOL and need some ideas of how to do common 
+things.
+
+*Those for whom REBOL is strange enough that they keep forgetting how
+to do common things.
+
+The code snippets that follow are written in a way such that they could
+be coped as-is into your own program.  You might want to change some 
+names, but the code should work as you find it.  They are more general
+than examples that you might find in tutorials.  
+
+The enclosed snippet manager is offered as a way to encourage you to
+capture your own code snippets as you write programs.  Depending on your
+own environment, it is not inconceivable that at some point you could 
+be writing a program and could remember that at some past time you
+did some specific thing, but now you just can't remember where.
+A common operation in this situation would be to search through old
+programs looking for that thing you can't quite remember.  But if, 
+at the time you first wrote that thing, you had thought, "I might want
+to do this again," you could have captured a relevant and generalized
+piece of code in your own snippet library, and now your own snippet 
+library would be the first place you would look.  Having all these
+snippets in one place reduces your "search space" as it were.
+Plus, the effort you expended to capture some bit of code would
+reinforce in your own mind how it worked and where to find it again.
+
+References:
+
+<a href="http://www.rebol.net/cookbook/">
+REBOL Cookbook of Code Examples</a>
+
+===Coding notes
+
+---Starting a program
+
+Habits can be helpful.  Here is a suggestion for starting a program.  
+This is mostly a beginner tip, for someone who is wondering, "Where do I
+start?"
+
+A REBOL program must have a minimum header of the word REBOL followed
+by a block (a pair of square brackets) that may be empty.  So, make yourself
+a skelton program file and copy it whenever you are starting a new program,
+and then fill in the blanks:
+    REBOL [
+        Title: " "
+        Date: 
+        Author:
+        Comment: {
+
+        }
+    ]
+
+Refer to:
+<a href="http://www.rebol.com/docs/core23/rebolcore-5.html#section-2">
+REBOL/Core Users Guide</a>
+
+---Bracket placement
+
+REBOL is completely free-format.  You could write an entire program on one 
+line.  But of course, don't.  Regarding placement of the square brackets that
+must include a lot of REBOL code, there are several ways that you might think
+of structuring them.  You could theoretically do this: 
+    if (condition)    
+    [ 
+        (some code)
+    ]
+
+Or this:
+    if (condition)
+        [
+        (some code)
+        ]
+
+Or this, which is recommended:
+    if (condition) [
+        (some code)
+    ]
+
+Note that the opening bracket is on the same line as the code that requires a
+bracket (in this case, the "if.").  That bracket positioning is a clue that
+other stuff is expected.  
+The closing bracket is on a line by 
+itself at the same indentation level as the "if" to show that it is closing the
+"if."  This is Carl's recommendation after much thought and everyone follows it.
+
+And, as noted in the style guide referenced below, use four spaces for 
+indenting.  Try tabs if you must to get it out of your system, but you will
+come back to spaces eventually, so why not start there.
+
+Refer to
+<a href="http://www.rebol.com/docs/core23/rebolcore-5.html#section-5.1">
+REBOL/Core Users Guide</a>
+
+---Bracket procedure, a suggestion
+
+A common syntax error in REBOL is a note about 
+"missing closing bracket at end of script."
+Because brackets have to match up only by the time the interpreter gets to 
+the end of the program, the interpreter can't tell you where you "wanted"
+to put a closing bracket but did not.  So here is a suggestion for writing
+your code.
+
+When you get to a place where a bock of something is to be written, let's
+say an "if" function, first type the function, like "if," with its condition,
+then type the opening bracket on the same line.
+
+Then, press the "enter" key once to go to the next line, then a second time
+to leave a blank line after the "if," then indent to the same level as the
+"if," and then type the closing bracket.  The result will look like this:
+    if (condition) [
+
+    ]
+
+Similarly for the "either" function where more brackets are required:
+    either (condition) [
+
+    ] [
+
+    ]
+
+Then, after you have typed the closing bracket, go back to the prior line
+and fill in the code or data you want there.  The purpose of this procedure
+is to make sure that you get that closing bracket in place so you don't 
+forget later. 
+
+In addition, train yourself to pay attention to the opening bracket.
+A missing opening bracket also is a not-uncommon oversight.
+The interpreter provides a little more help for finding a missing opening
+bracket. 
+
+---Including code modules
+
+A common procedure in REBOL, or any programming language probably, is to
+write functions, data items, generally things that can be re-used, in 
+separate code files and then insert them somehow into programs.
+That is accomplished in REBOL by writing that reusable code in its own
+script, with the REBOL header, and then pulling it into another program
+with the "do" function.  It would look something like this.
+You would have some reusable function in its own program:
+    REBOL [
+        Title "Collection of common functions"
+        File: %commonfunctions.r
+    ]
+    COMMON-FUNCTION-1: does [
+        (function code)
+    ]
+
+Then in some other program that needed to use COMMON-FUNCTION-1,
+you would code
+    REBOL [
+        Title: "Main program"
+    ]
+    do %commonfunctions.r
+    ... other code
+    COMMON-FUNCTION-1  ;; invoke the function from the module
+
+This technique is used a lot for configuration files.
+Code into a small script all those things that might be modified when
+tailoring a program for different environments or uses.  Then, if you
+want to deploy that program and want to configure it for its new
+home, you know that all the items that might need reconfiguring are in
+just one configuration file.
+
+===Code snippet concept
+
+You probably have had the experience of wanting to do some little thing in
+a program and knowing you have done it before, but being unable to remember
+exactly where or how.  Maybe you finally remember where, so you go to that
+program and copy out some relevant code, and paste it into a new program.
+Some development environments have formalized that operation into a library
+of code "snippets" that you can insert into program. 
+
+The code samples that in this document were written in a way such that,
+when possible, they could be copied as they are and pasted into a program.
+Not that you would want to use them exactly as presented, but you could,
+and you also could copy them into a program and make some modifications to
+suit your style.  But at least you could have a starting point.  
+
+So the samples show some REBOL concept, there is documentation to explain
+the concept as best we can, then there is the code sample written in a
+way such that you might be able to use it.
+
+\note Make your own snippet collection
+
+Another purpose of this document, not so specifically stated, is that you
+might want to consider creating your own collection of bits of code that
+you use over and over again.  The following program can help you keep track
+of them.  Then you can write code a little bit faster if you don't have to
+keep looking around for something you have done before but can't quite
+remember. 
+
+/note
+
+---Snippet manager program 
+
+If you find any of the following code samples useful, we present here a way
+that you could make them more readily available for use.  You could of
+course refer back to this document, but here is another idea.  Presented 
+below are two REBOL programs that form a small "snippet manager."  
+These programs store code and documenation in files, and provide a basic
+window for storing and retrieving bits of code.  There also is a button to
+copy a bit of code to the clipboard so that you could paste it into a
+program.  
+
+The snippet manager also shows a concept alluded to on the REBOL web site,
+about how REBOL can have a presence on a client and on a server, and also
+in the data.  The snippet manager stores a code sample and its documentation
+in a file that is in a format REBOL can recognize.  The snippet file can
+be brought into memory with the "load" function and suddenly words become
+available to use for referring to the code and its documentation.
+Try making a snippet and then looking at the data file that is create to 
+store it.  
+
+The snippet manager consists of two REBOL programs, one for managing the
+existing files, and another, called from the main program, for creating a
+new file.  They are not large programs, so here is the code which you may
+copy and save.
+
++++Starting script, sniplib.bat
+
+First is a DOS batch file to run the main program.  You would not need this
+if you have installed REBOL.  If you are not using a Windows computer, you
+are a bit on your own if you want some sort of shell script for running the
+program.  Or, you can just get a command prompt and "do %sniplib.r."
+Here is that batch file.  Save it as "sniplib.bat."
+    start "" "C:\Program Files (x86)\rebol\view\rebol.exe" -i -s --script %sniplib.r 
+
++++Main program, sniplib.r
+
+Next is the main program.  If you examine the program, you will see that
+it makes a folder called "Snippets" for storing code samples.  It does not
+ask for permisstion to do that, so if permission is an issue, you might want
+to be careful where you save this program.  Save it as "sniplib.r."
+    REBOL [
+        Title: "Snippet manager"
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Here are some connfiguration items you might want to change,              ]
+    ;; [ or might want to put into a separate configuration file.                  ]
+    ;; [ The logo is just something harvested from the internet to show the        ]
+    ;; [ concept of embedding an image.                                            ]
+    ;; [ If you set the directory to none, then the program will ask for it.       ]
+    ;; [---------------------------------------------------------------------------]
+    
+    CONFIG-SNIPLIB-DIR: %Snippets
+    CONFIG-LOGO: load
+    64#{
+    R0lGODlhbABsAPQAAAAAAAgMDRQbHB0mKCYwMi05OzRCRDtKTEFRVEdYW0xfYlJl
+    aVdsb1xydWF4e2V9gWqDhwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    AAAAAAAAAAAAAAAAACH5BAAAAAAALAAAAABsAGwAAAX+ICSOZGmeaKqubOu+cCzP
+    dG3feK7vfO//wKBwSCwaj8ikcslMNhjQKMPRrEIaCgRhAOh6v10BAbGgWoWORCEA
+    bru/AoPicd45ENy3ft8tzOs1CgR8hIUGDIAvDwgChY6FAgqJKwlsj5eEBA2TJgyN
+    mKCECZwiDwahqHwEpJ6YBAcIsQYElqleBZwIlwYLKQ4KBbYAvYCmjwZmLA4HtZcC
+    iQ95hAKIMQ7BmJJ10Y4FdDQKzXzP29J8BjgN4nraVtyGOuqZgNiE6Dvye9VWuoUD
+    PvncHKjDwFGAZDwWvAnwrcqDdW/a+TjghpiVeqqGmAMw8IxCR5uEPFigBcA9d5/+
+    7JEq0q8QwpU/HjpaBVNIS0IWa/qQWSiAziAJjv0EkhLnUB8FHx31cWrm0h4Q3yB4
+    uuOjo31Ub1BUmjVHUT7/ut54cAmXWBtWC009W+OmKLY1Bj3CChfGVz5067rA9FIv
+    iwaY/MZIylWwi7SFDL9wS0ixC8Z8HLeAvEcHgcuYM2vezHlzyB2U9egQhrdH6Dej
+    SevJe+O0m9Sq3bC24brNZxux38xui2k3DAQF7goTcKBv6948HCwwIPwSAd+0Ma31
+    sQDjJYnUMXUEogDUdCCEnQoJ+sjnEMCXzAdx4LwIKOM8Ln0PspEQdh/yi1hXKSQ/
+    kdpgkBOEf0OEB1J/j8z7F0RUemz3A4FD7MeHeg8maER32QxoYRFkYRJWhY4oGISE
+    pYGo1hGIFUITfhsa0dwe9+UA4X+gMMRiiEjwVNaNJyIBYBujxNfiES/ukRMOMxaR
+    Yk+33ZCkfqEEcGQNTxKhIyZBOjkkEgY6B98LVRZBXpQINBQDeo5kuURTqARgQJMq
+    PCBImEewmQpxC8AJAQMk1TchdHXmltsAX64pKGkinoHhoaBQU1MDRTLaRpk/PUCi
+    pF9o8lQrmLYhwJRHVdJpGDE+9UACkaISiWHV5XaIZBDIaQCDewTgh5mwivCLFn52
+    EQABBiQAaK4kPCAFscgmq+yyzDbr7LNJhAAAOw==
+    }
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ The following command captures the directory where we are when the        ]
+    ;; [ program starts.  This is needed in case we have to change directories     ]
+    ;; [ to store data.  With it, we can get back "home" to where we started.      ]
+    ;; [---------------------------------------------------------------------------]
+    
+    HOME-DIR: what-dir
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This SNIP-LIST block is a list of snippets.                               ]
+    ;; [ Each item on the list is two items in the block; in other words, the      ]
+    ;; [ block is pairs of items.  The first item of a pair is the title from      ]
+    ;; [ a snippet file.  This title is what shows in the list.  The second        ]
+    ;; [ item of the pair is the name of the file.  When an item from the list     ]
+    ;; [ is selected, we want to load the associated file and display its          ]
+    ;; [ contents in the two areas below the list.                                 ]
+    ;; [ Other data items below are used in managing the SNIP-LIST.                ]
+    ;; [---------------------------------------------------------------------------]
+    
+    SNIP-LIST: []
+    SNIP-LIST-LOADED: false
+    SNIP-FILE-LIST: []
+    SNIP-CURRENT-FILE: none
+    SNIP-TITLE-LIST: []
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ These items are used when we modify a snippet.                            ]
+    ;; [ The operator, once he has selected a snippet, can modify it and save it   ]
+    ;; [ if he wants to refine it.                                                 ]
+    ;; [---------------------------------------------------------------------------]
+    
+    MOD-SNIP-CONTENT: ""
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This procedure loads the SNIP-LIST.                                       ]
+    ;; [ This is accomplished by requesting the folder that contains the           ]
+    ;; [ snippets we want to load (we can have many "libraries" of snippets)       ]
+    ;; [ and loading each file.  Then, from each file, we obtain the title         ]
+    ;; [ and the file name and add them to the SNIP-LIST block.                    ]
+    ;; [ Finally, we will refresh the main window with the new list.               ]
+    ;; [ We set a flag to indicate that the list is loaded, so that the procedure  ]
+    ;; [ to handle selecting from the list does not crash trying to search an      ]
+    ;; [ empty list.                                                               ]
+    ;; [---------------------------------------------------------------------------]
+    
+    LOAD-SNIP-LIST: does [
+        change-dir HOME-DIR
+        if not dir? CONFIG-SNIPLIB-DIR [
+            make-dir CONFIG-SNIPLIB-DIR
+        ]
+        change-dir CONFIG-SNIPLIB-DIR
+        SNIP-FILE-LIST: read %.
+        SNIP-LIST: copy []
+        foreach FILE-NAME SNIP-FILE-LIST [
+            do load/all FILE-NAME
+            append SNIP-LIST SNIP-TITLE
+            append SNIP-LIST FILE-NAME
+        ]
+        SNIP-LIST-LOADED: true
+        SNIP-TITLE-LIST: copy []
+        SNIP-TITLE-LIST: extract SNIP-LIST 2
+        MAIN-LIST/data: copy []
+        MAIN-LIST/data: SNIP-TITLE-LIST 
+        MAIN-LIST/sld/redrag MAIN-LIST/lc / max 1 length? SNIP-TITLE-LIST
+        show MAIN-LIST
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the procedure executed when an item is selected from the          ]
+    ;; [ snippet list on the main window.                                          ]
+    ;; [ It uses the selected title to search the SNIP-LIST.  It has to find       ]
+    ;; [ something there because the SNIP-LIST is the source of the list in        ]
+    ;; [ the first place.  When it finds the title in the SNIP-LIST,               ]
+    ;; [ the item after the title is the file name, so it loads that file          ]
+    ;; [ and displays its contents in the other two boxes on the main window.      ]
+    ;; [ Notice how we must set the line-list facet of the text areas.             ]
+    ;; [ If we don't do that, then after selecting a few items, funny stuff        ]
+    ;; [ starts to appear in the text areas.                                       ]
+    ;; [---------------------------------------------------------------------------]
+    
+    SELECT-SNIP: func [SELECTED-TITLE] [
+        SELECTED-FILE: select SNIP-LIST SELECTED-TITLE
+        do load/all SELECTED-FILE
+        SNIP-CURRENT-FILE: copy SELECTED-FILE
+        MAIN-DESCRIPTION/text: SNIP-DESCRIPTION
+        MAIN-DESCRIPTION/line-list: none
+        MAIN-CODE/text: SNIP-CODE
+        MAIN-CODE/line-list: none
+        show MAIN-DESCRIPTION
+        show MAIN-CODE
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the function for the "Copy" button.                               ]
+    ;; [ It copies the snippet showing in the code window to the clipboard.        ]
+    ;; [ If no file has been selected, that is an error, but, if the code window   ]
+    ;; [ is blank, that theoretically could be OK if the operator spaced it out.   ]
+    ;; [ We do not give a response when done because usually we will want to       ]
+    ;; [ paste that code right away into some other file, so dealing with a        ]
+    ;; [ response would be a nuisance.                                             ]
+    ;; [---------------------------------------------------------------------------]
+    
+    COPY-CURRENT-SNIP: does [
+        if not SNIP-CURRENT-FILE [
+            alert "No snippet selected"
+            exit
+        ]
+        write clipboard:// MAIN-CODE/text
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This procecure is just like the above, except that it puts four spaces    ]
+    ;; [ at the front of each line to indent it.  This is used sometimes for       ]
+    ;; [ pasting code into documentation.                                          ]
+    ;; [---------------------------------------------------------------------------]
+    
+    COPY-INDENT-CURRENT-SNIP: does [
+        if not SNIP-CURRENT-FILE [
+            alert "No snippet selected"
+            exit
+        ]
+        write clipboard:// MAIN-CODE/text
+        TEMP-LINES: copy ""
+        TEMP-LINES: read clipboard://
+        insert/dup TEMP-LINES " " 4
+        replace/all TEMP-LINES newline rejoin [newline "    "]
+        write clipboard:// TEMP-LINES
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the function for the "Modify" button.                             ]
+    ;; [ It overwrites the current snippet file with the contents of the           ]
+    ;; [ text entry areas.  It allows the operator to refine or touch up a         ]
+    ;; [ snippet.                                                                  ]
+    ;; [---------------------------------------------------------------------------]
+    
+    MODIFY-CURRENT-SNIP: does [
+        if not SNIP-CURRENT-FILE [
+            alert "No snippet selected"
+            exit
+        ]
+        MOD-SNIP-CONTENT: rejoin [
+            "SNIP-TITLE: "
+            {"}
+            SNIP-TITLE
+            {"}
+            newline
+            "SNIP-DESCRIPTION: "
+            "{"
+            SNIP-DESCRIPTION
+            "}"
+            newline
+            "SNIP-CODE: "
+            "{"
+            SNIP-CODE
+            "}"
+        ]
+        change-dir HOME-DIR
+        change-dir CONFIG-SNIPLIB-DIR
+        write/lines SNIP-CURRENT-FILE MOD-SNIP-CONTENT
+        alert "Modified"
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the function for the "New" button.                                ]
+    ;; [ It brings up a window for writing/pasting a new snippet and then          ]
+    ;; [ saving it.                                                                ]
+    ;; [ Note that if we previously have loaded a library, we better get back      ]
+    ;; [ to that folder in case we have to do some reading or writing to it.       ]
+    ;; [---------------------------------------------------------------------------]
+    
+    NEW-SNIP: does [
+        change-dir HOME-DIR
+        launch %newsnip.r
+        if SNIP-LIST-LOADED [
+            change-dir CONFIG-SNIPLIB-DIR
+        ]
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the function for the "Replace" button.                            ]
+    ;; [ It does a find/replace operation on the current code.                     ]
+    ;; [ The operator may then save the modified code, or not.                     ]
+    ;; [---------------------------------------------------------------------------]
+    
+    FIND-REPLACE: does [
+        if not SNIP-CURRENT-FILE [
+            alert "No snippet selected"
+            exit
+        ]
+        FIND-TEXT: copy ""
+        FIND-TEXT: request-text/title "Text to find"
+        if not FIND-TEXT [
+            alert "No text specified"
+            exit
+        ]
+        REPL-TEXT: copy ""
+        REPL-TEXT: request-text/title rejoin [
+            "Text to replace '"
+            FIND-TEXT
+            "'"
+        ]
+        replace/all MAIN-CODE/text FIND-TEXT REPL-TEXT
+        MAIN-CODE/line-list: none
+        show MAIN-CODE
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the function for the "Debug" button.                              ]
+    ;; [ It halts the program so we can probe internal values.                     ]
+    ;; [---------------------------------------------------------------------------]
+    
+    DEBUG-BUTTON-LEFT: does [
+        halt
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the function for the "Quit" button.                               ]
+    ;; [---------------------------------------------------------------------------]
+    
+    QUIT-BUTTON-LEFT: does [
+        quit
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the main window used by this program.                             ]
+    ;; [---------------------------------------------------------------------------]
+    
+    MAIN-WINDOW: layout [
+        tabs 20
+        image CONFIG-LOGO
+        return
+        banner "Snippet Manager"
+            font [size: 48]
+        across
+        return
+        label "Snippet list:"
+        tab 
+        MAIN-LIST: text-list 600x200 data SNIP-TITLE-LIST 
+            [SELECT-SNIP value] ; "value" is selected item
+        return
+        label "Description:"
+        tab 
+        MAIN-DESCRIPTION: area 600x200 wrap font-name font-fixed
+        return
+        label "Code:"
+        tab tab tab 
+        MAIN-CODE: area 600x200 font-name font-fixed
+        return
+        box 700x2 red
+        return
+        button "Load" [LOAD-SNIP-LIST]
+        button "Copy" [COPY-CURRENT-SNIP]
+        button "Copy/indent" [COPY-INDENT-CURRENT-SNIP] 
+        button "Modify" [MODIFY-CURRENT-SNIP]
+        button "New" [NEW-SNIP]
+        button "Replace" [FIND-REPLACE] 
+        return
+        box 700x2 red
+        return
+        button "Quit" [QUIT-BUTTON-LEFT] 
+        button "Debug" [DEBUG-BUTTON-LEFT] 
+    ]
+    
+    view center-face MAIN-WINDOW
+
++++New snippet creator, newsnip.r
+
+And finally, we have the program for making a new code snippet.
+This operation is in a separate program just to make the main program
+cleaner.  This program is called by the main program.
+Save this program as "newsnip.r."
+    REBOL [
+        Title: "New snippet"
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Items you might want to pull out into a separate configuration file.      ]
+    ;; [---------------------------------------------------------------------------]
+    
+    CONFIG-SNIPLIB-DIR: %Snippets
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ The following command captures the directory where we are when the        ]
+    ;; [ program starts.  This is needed in case we have to change directories     ]
+    ;; [ to store data.  With it, we can get back "home" to where we started.      ]
+    ;; [---------------------------------------------------------------------------]
+    
+    HOME-DIR: what-dir
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ Get the directory where we will store the new snippet.                    ]
+    ;; [---------------------------------------------------------------------------]
+    
+    if not dir? CONFIG-SNIPLIB-DIR [
+        make-dir CONFIG-SNIPLIB-DIR
+    ]
+    change-dir CONFIG-SNIPLIB-DIR
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ These items are used when we modify a snippet.                            ]
+    ;; [ The operator, once he has selected a snippet, can modify it and save it   ]
+    ;; [ if he wants to refine it.                                                 ]
+    ;; [---------------------------------------------------------------------------]
+    
+    SNIP-CONTENT: ""
+    SNIP-FILE: none
+    SNIP-TITLE: none
+    SNIP-DESCRIPTION: none
+    SNIP-CODE: none
+    SNIP-FILENAME: none
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the function for the "Save" button.                               ]
+    ;; [ It saves the data from the window in a "loadable" format for the          ]
+    ;; [ snippet manager.                                                          ]
+    ;; [---------------------------------------------------------------------------]
+    
+    SAVE-SNIP: does [
+        SNIP-CONTENT: copy ""
+        SNIP-FILE: copy ""
+        SNIP-TITLE: copy ""
+        SNIP-DESCRIPTION: copy ""
+        SNIP-CODE: copy ""
+        SNIP-FILE: trim/all MAIN-FILE/text
+        SNIP-TITLE: MAIN-TITLE/text
+        SNIP-DESCRIPTION: MAIN-DESCRIPTION/text
+        SNIP-CODE: MAIN-CODE/text
+        if not SNIP-FILE [
+            alert "No file name specified"
+            exit
+        ]
+        if equal? SNIP-FILE "" [
+            alert "File name must not be blank"
+            exit
+        ]
+        if not SNIP-TITLE [
+            alert "No title specified"
+            exit
+        ]
+        if equal? SNIP-TITLE "" [
+            alert "Title must not be blank"
+            exit
+        ]
+        SNIP-FILENAME: to-file rejoin [
+            SNIP-FILE
+            ".txt"
+        ]
+        SNIP-CONTENT: rejoin [
+            "SNIP-TITLE: "
+            {"}
+            SNIP-TITLE
+            {"}
+            newline
+            "SNIP-DESCRIPTION: "
+            "{"
+            SNIP-DESCRIPTION
+            "}"
+            newline
+            "SNIP-CODE: "
+            "{"
+            SNIP-CODE
+            "}"
+        ]
+        write/lines SNIP-FILENAME SNIP-CONTENT
+        alert "Saved"
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the function for the "Debug" button.                              ]
+    ;; [ It halts the program so we can probe internal values.                     ]
+    ;; [---------------------------------------------------------------------------]
+    
+    DEBUG-BUTTON-LEFT: does [
+        halt
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the function for the "Quit" button.                               ]
+    ;; [---------------------------------------------------------------------------]
+    
+    QUIT-BUTTON-LEFT: does [
+        quit
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is the main window used by this program.                             ]
+    ;; [---------------------------------------------------------------------------]
+    
+    MAIN-WINDOW: [
+        tabs 20
+    ;;; image CONFIG-LOGO
+        return
+        vh1 "New Snippet"
+        across
+        return
+        label "Title:"
+        tab tab tab
+        MAIN-TITLE: field 600 
+        return
+        label "File name:"
+        tab tab
+        MAIN-FILE: field 600
+        return
+        label "Description:"
+        tab 
+        MAIN-DESCRIPTION: area 600x200 wrap font-name font-fixed
+        return
+        label "Code:"
+        tab tab tab 
+        MAIN-CODE: area 600x200 font-name font-fixed
+        return
+        box 700x2 red
+        return
+        button "Save" [SAVE-SNIP]
+        return
+        box 700x2 red
+        return
+        button "Quit" [QUIT-BUTTON-LEFT]
+        button "Debug" [DEBUG-BUTTON-LEFT] 
+    ]
+    
+    view layout MAIN-WINDOW
+    
+===Code snippets
+
+Here are some code "bites" offered as potentially useful.
+We have tried to write them in a way such that they can be used as they are.
+
+---General
+
+These samples don't fall into any particular category.
+
++++REBOL header
+
+Every program must start with a header containing the word REBOL followed
+by a block, which may be empty but also may contain various words whose
+values help define the program.  You are encouraged to make your own header
+for your own installation, and then use it as a starting point for your own
+programs.  Here is one idea:
+    REBOL [
+        Title: " "
+        Date: DD-MON-YYYY
+        Author: " "
+        Version: 0.0.0
+        Purpose: {
+
+        }
+        Comment: {
+
+        }
+    ]
+
+Reference:
+<a href="http://www.rebol.org/view-script.r?script=headfull.r">
+Full REBOL header</a>
+
+---GUI-related
+
+These bites have some GUI component, although sometimes that is all the
+common ground you will find.
+
++++Embedding an image
+
+In a lot of REBOL demos on the internet, you see images embedded in scripts
+so that it is not necessary to provide an image in a separate file.  Here 
+is how that is done.  The image file is read into memory with base-64
+encoding (whatever that is) and then "loaded" with the "load" function.
+The result can be put in a REBOL/View window with the image facet of an
+"image" style.  The snippet below encapsulates the creation of the 
+embedded image as a function which your program may call.  If the program
+you are writing doesn't operate this way, you could chop out just the
+part that reads the file, and leave behind the part that requests the name
+of the file.
+    IMAGE-STRING: does [
+        system/options/binary-base: 64
+        IMAGESTRING-FILE: request-file/only
+        if not IMAGESTRING-FILE [
+            alert "No file specified"
+            exit
+        ]
+        IMAGESTRING-STRING: read/binary IMAGESTRING-FILE
+        save clipboard:// IMAGESTRING-STRING
+        alert "Hex representation of image is on the clipboard"
+    ]
+
+
+Reference:
+<a href="http://www.rebol.net/cookbook/recipes/0048.html">
+REBOL Cookbook, recipe 48</a>     
+    
++++Alert with OK or Cancel
+
+An alert window can have more than just the OK button to close it.
+A second literal will produce a second button.  The first button will
+return true, the second false.  So you can use an alert like this to
+alert to some situation where you might want to just quit if the
+operator does not give the OK. 
+    GO?: alert [
+        "OK to proceed?"
+        "OK"
+        "Cancel"
+    ]
+    if not GO? [
+        alert "Operation canceled"
+        quit
+    ]
+
+Reference:
+<a href="http://www.rebol.com/docs/words/walert.html">
+REBOL function dictionary</a> 
+
++++Request one file name
+
+A common operation is to request a single file name.
+A related common operation is to quit if the operator changes his mind
+and does not specify a file name.  This combination of operations is
+combined in this snippet, which asks for a file and quits with an alert
+if none is specified.  If this procedure does not quit, then FILE-NAME
+will contain a full file name, which you may use as appropriate.
+    FILE-NAME: request-file/only
+    if not FILE-NAME [
+        alert "No file requested"
+        quit
+    ]
+
++++Trap "close" button
+
+This is how you intercept the clicking of the "close" button on a 
+Windows window, the X in the upper right corner.
+You have to create an "event" function that is executed when an
+"event" happens.  In the function, you have to see what that
+event is, and then either take some action or just let the event
+continue to happen.
+    ;;  -- Trap the "close" button (the X at the top right) so we can
+    ;;  -- display a message. 
+    closer: insert-event-func [ 
+         either event/type = 'close [ 
+             if true = request "OK to close?" [
+                 remove-event-func :closer
+             ] 
+         ] [
+             event
+         ] 
+    ] 
+    
+---File related
+
+These snippets are related to working with file names.
+
++++File list in current directory
+
+This is just a one-liner, so what's the point.  
+The point is that it is a line some people can't remember, so we put it
+in a snippet to be copied.  The result of this line is that FILENAME-LIST
+will be a block containing the full names of every file in the current
+directory.
+    FILENAME-LIST: read %.                
+
+
+Reference:
+<a href="http://www.rebol.net/cookbook/recipes/0005.html">
+REBOL Cookbook, recipe 5</a>         
+
++++File list of a certain type
+
+This snippet was stolen from a program by Carl.  It requests a folder
+name and then locates all file in it that probably are image files,
+based on the suffix of the file name.  
+
+The statement to read the specified directory creates a block, called
+"files," that contains all the file names in that directory.
+The following "while" loop is a nice little loop that does the following.
+It checks the first file name in the block to see if it is an image
+file, using the "image-file?" function to do that.  If the file is an
+image file, the program positions the word "files" to point at the
+NEXT name in the block, making that name the new first name.
+If the file is NOT an image file, the program removes it from the
+block, and the next file name becomes the new first name.
+In this way, the "while" loop keeps checking the first name in the
+"files" block until it hits the tail.  Then in repositions to the
+head of the block and checks to see if there is anything left.
+
+The "image-file? function is a nice example of the REBOL as she
+should be spoken.  It operates on one file name, and searches it from
+the right until it finds the first dot.  Then it searches that piece,
+which will be the extension, to see if it matches any of the given
+extensions for image files.  If it finds one of those extensions,
+it returns true, otherwise false.
+
+This snippet came from a program that worked with image files, but
+it could be modified quickly for any other file types, so it is a
+good candidate for a snippet even thought it is somewhat specific.
+    image-file?: func ["Returns true if file is an image" file] [
+        find [%.bmp %.jpg %.jpeg %.gif %.png] find/last file "."
+    ]
+    
+    directory: request-dir
+    if not directory [
+        quit     
+    ]
+    
+    files: read directory/.  ;-- Read local file list, but want just image files...
+    while [not tail? files] [
+        either image-file? first files [files: next files][remove files]
+    ]
+    files: head files
+    if empty? files [
+        inform layout [backdrop 140.0.0 text bold "No images found"]
+        quit  
+    ]
+
+Reference:
+<a href="http://www.rebol.net/cookbook/recipes/0005.html">
+REBOL Cookbook, recipe 5</a>         
+
+---CGI related
+
+This are snippets that could be useful in a CGI program.
+
++++CGI first lines
+
+This is basically that one line that must be at the front of a CGI
+program, that line that some people can't seeme to remember.
+This snippet almost certainly will NOT work for everyone, but its usefulness
+here is that it shows the format, and you can modify it for your own
+installation.  The first line shows the full path name to the REBOL
+interpreter, and you would adjust it for your own location.
+    #!c:/rebol-sdk/tools/rebcmd.exe -cs
+    REBOL [
+        Title: ""
+    ]
+    
++++CGI get input 
+
+This is a procedure that attempts to do as much as possible   
+to help in the processing of CGI data.                        
+The procedure CGI-GET-INPUT reads the CGI data in whatever    
+form it is presented                                          
+(POST or GET), and then puts the raw data into a string       
+called CGI-STRING.  Then it uses the decode-cgi command to    
+break it apart into name/value pairs.                         
+It passes the name/value pairs to the construct function    
+which makes them into a context called CGI-INPUT.           
+As a context, the data can be referenced as                 
+CGI-INPUT/data-name where data-name is a name specified in  
+the "name" attribute in the HTML form.
+
+The procedure CGI-GET-INPUT seems to hang up on IIS.   
+As a workaround, there is a separate procedure for IIS that returns   
+the same CGI-INPUT context, but by different means.      
+The "different means" is to read a fixed amount of data out of   
+the system/ports/input port.        
+two procedures are mutually exclusive.  Use on or the other.
+    CGI-STRING: ""                 
+    
+    ;;  -- Apache version
+    
+    CGI-GET-INPUT: does [
+        CGI-STRING: CGI-READ
+        CGI-INPUT: construct decode-cgi CGI-STRING
+    ]
+    CGI-READ: func [
+        "Read CGI data (GET or POST) and return as a string or NONE"
+        /limit CGI-MAX-INPUT "Limit input to this number of bytes"
+        /local CGI-DATA CGI-BUFFER
+    ] [
+        if none? limit [CGI-MAX-INPUT: 100000]
+        switch system/options/cgi/request-method [
+            "POST" [
+                CGI-DATA: make string! 1020
+                CGI-BUFFER: make string! 16380
+                while [positive? read-io system/ports/input CGI-BUFFER 16380] [
+                    append CGI-DATA CGI-BUFFER
+                    clear CGI-BUFFER
+                    if (length? CGI-DATA) > CGI-MAX-INPUT [
+                        print ["aborted - form input too large:"
+                            length? CGI-DATA "; limit:" CGI-MAX-INPUT]
+                        quit
+                    ]  
+                ]
+            ]
+            "GET" [
+                CGI-DATA: system/options/cgi/query-string
+            ]
+        ]
+        CGI-DATA
+    ]
+    
+    ;;  -- IIS version
+    
+    CGI-GET-INPUT-IIS: does [
+       CGI-STRING: CGI-READ-IIS
+       CGI-INPUT: construct decode-cgi CGI-STRING
+    ]
+    CGI-READ-IIS: func [
+    ] [
+        CGI-DATA: make string! 5000
+        switch system/options/cgi/request-method [
+            "POST" [
+                read-io system/ports/input CGI-DATA 5002
+            ]
+            "GET" [
+                GGI-DATA: system/options/cgi/query-string
+            ]
+        ]
+        CGI-DATA
+    ]
+   
++++CGI display header
+
+In a CGI program, before you send any html to the browser, you must send
+a required header to indicate that html is following.  That is done with
+the following few lines of code.
+    CGI-DISPLAY-HEADER: does [
+        print "content-type: text/html"
+        print ""
+        print ""
+    ]
+
++++CGI emit html
+
+These are some little service procedures for adding html to a big string of
+characters that eventually will become a web page.  CGI-EMIT-HTML take a string
+of anything, evaluates any REBOL code within ("reducing" it), and appends it
+to the output string.  CGI-EMIT-FILE takes a file name, which will be a file
+of html code, reads it, and replaces within it any REBOL code delimited by
+<% and %> (the "build-markup" function), and then appends that file to the
+final output string.
+    CGI-OUTPUT: make string! 5000
+    CGI-EMIT-HTML: func [CGI-OUT-LINE] [
+        repend CGI-OUTPUT CGI-OUT-LINE
+        append CGI-OUTPUT newline
+    ]
+    CGI-EMIT-FILE: func [
+        CGI-FILE-TO-EMIT [file!]
+    ] [
+        CGI-EMIT-HTML build-markup read CGI-FILE-TO-EMIT
+    ] 
+
+Reference:
+<a href="http://www.rebol.net/cookbook/recipes/0006.html">
+REBOL Cookbook, recipe 6</a>         
+    
+---Date and time related
+
++++Datestamp in yyyymmdd format
+
+This snippet returns the current date in a string, in yyyymmdd order,
+suitable for using in, perhaps, a file name if you want things in date
+order.  If you are not familiar with how REBOL evaluates a line of code,
+take a look at one of the lines, the one that makes sure the month
+is two digits.  The data item now/month will 
+return a single-digit month for January through September.
+We want a full two digits for every month because we are making a string
+that might be sorted and displayed, so the result must be eight digits
+every time. 
+
+The line:
+    reverse copy/part reverse join 0 TEMP-DATE/month 2
+
+Could be written like this, if parentheses were part of the REBOL
+syntax:
+    reverse (copy/part ((reverse (join 0 TEMP-DATE/month))) 2)
+
+In other words, do the following steps:
+
+*Join a zero and the month, thus assuring that we have a full 
+two digits.  January will become 01, and December will become 012.
+
+*Reverse the above results.  January becomes 10, December becomes 210.
+
+*Copy off just two digits.  January becomes 10, December becomes 21.
+
+*Reverse the above.  January becomes 01, December becomes 12.
+
+Here is the full snippet.
+    DATESTAMP-YYYYMMDD: does [
+        TEMP-DATE: now
+        TEMP-YYYYMMDD: to-string rejoin [
+            TEMP-DATE/year
+            reverse copy/part reverse join 0 TEMP-DATE/month 2
+            reverse copy/part reverse join 0 TEMP-DATE/day 2
+        ]
+        return TEMP-YYYYMMDD
+    ]
+
++++Get yyyymmdd date
+
+This snippet is like the one above except that it asks for a date
+and returns the requested date in yyyymmdd order, or 00000000 if no
+date is requested.
+    GET-YYYYMMDD: does [
+        TEMP-DATE: request-date
+        either TEMP-DATE [
+            TEMP-YYYYMMDD: to-string rejoin [
+                TEMP-DATE/year
+                reverse copy/part reverse join 0 TEMP-DATE/month 2
+                reverse copy/part reverse join 0 TEMP-DATE/day 2
+            ]
+        ] [
+            TEMP-YYYYMMDD: "00000000"
+        ]
+        return TEMP-YYYYMMDD
+    ]
+
++++Timestamp in hhmmss format
+
+This snippet gets the current time and returns it in a six-digit string
+of hhmmss format, suitable for a timestamp. The "trim/with" function trims
+out all the colons. 
+    TIMESTAMP-HHMMSS: does [
+        TEMP-TIME: to-string rejoin [
+            reverse copy/part reverse join "0" trim/with to-string now/time ":" 6
+        ]
+        return TEMP-TIME
+    ]
+
++++Generate date-time stamp yyyymmddhhmmss
+
+This snippet is a combination of the above, taking a REBOL date and
+generating a date-time stamp in yyyymmddhhmmss order, suitable for things
+like file names and log date stamps.
+
+The REBOL date could be a date obtained from the "now" function, or it
+could be something like 01-JAN-2015 or 2014-12-31 (both recognized by
+REBOL).  The date from "now" includes a time, but the other dates do not.
+We want a consistent result of 14 digits.  In addition, REBOL is helpful
+in that dates and times have leading zeros suppressed when appropriate.
+That is why you see the length checking in the code.  REBOL might produce,
+for a time,
+
+*H:MM
+
+*H:MM:SS
+
+*HH:MM
+
+*HH:MM:SS
+
+Note that we are not proposing that this is the only way to code this.
+    GEN-YYYYMMDDHHMMSS: func [
+        REBOL-DATE
+        /local
+            TEMP-YYYYMMDDHHMMSS
+            TEST-TIME
+            TIME-LENGTH
+            TEMP-TIME 
+    ] [
+        TEMP-YYYYMMDDHHMMSS: to-string rejoin [
+            REBOL-DATE/year
+            reverse copy/part reverse join 0 REBOL-DATE/month 2
+            reverse copy/part reverse join 0 REBOL-DATE/day 2
+        ]
+        either REBOL-DATE/time [   ;; time is none if not present 
+            TEST-TIME: copy trim/with to-string REBOL-DATE/time ":"
+            TIME-LENGTH: length? TEST-TIME 
+            TEMP-TIME: copy TEST-TIME  ;; Default case
+            if equal? 4 TIME-LENGTH [
+                TEMP-TIME: rejoin [TEST-TIME "00"]
+            ]
+            if equal? 5 TIME-LENGTH [
+                TEMP-TIME: rejoin ["0" TEST-TIME]
+            ]
+            if equal? 3 TIME-LENGTH [
+                TEMP-TIME: rejoin ["0" TEST-TIME "00"]
+            ]
+            append TEMP-YYYYMMDDHHMMSS TEMP-TIME 
+        ] [
+            append TEMP-YYYYMMDDHHMMSS "000000"
+        ]
+        return TEMP-YYYYMMDDHHMMSS
+    ]
+
++++Parse US date
+
+This function, courtesy of Nick Antonaccio and mutiliated a bit by
+me to be less elegant but more "plodding" and understandable to the
+novice, takes a date plus optional time, in the US format, and returns
+a REBOL date.  The input date must be in mm/dd/yyyy format and the time
+must be hh:mm:ss.  Leading zeros on month, day, hours, and minutes are
+optional because the to-date function in REBOL can handle dates
+without the leading zeros.  The snipped is written as a function that
+may be called with the date as an argument.  It parses the data on
+slashes and spaces, reassembles the parts in a different order, and
+feeds the parts to the to-date function, as shown:
+
+    us-date: func [
+        "Take apart US date, reassemble, convert to REBOL date" 
+        usdate
+        /local tempdate
+    ] [
+        tempdate: parse usdate "/"
+        to-date rejoin [
+            tempdate/2 "/" 
+            tempdate/1 "/"
+            tempdate/3 " "
+            either tempdate/4 [tempdate/4] [""]
+        ]
+    ] 
+    ;print new-date1: us-date "5/2/2014 13:42" 
+    ;print [type? new-date1]
+
+---String related
+
++++Filler
+
+Here is a function that produces a string of blanks of a specified
+size.  It is useful for producing fixed-format text lines.
+For example:
+    print ["Date:" FILLER 5 now] 
+
+Here is the snippet.
+    FILLER: func [
+        "Return a string of a given number of spaces"
+        SPACECOUNT [integer!]
+        /local FILLERSTRING 
+    ] [
+        FILLERSTRING: copy ""
+        loop SPACECOUNT [
+            append FILLERSTRING " "
+        ]
+        return FILLERSTRING
+    ]
+
++++Substring
+
+There are several ways to think of a substring function.
+One could ask for a substring starting at a specified position
+and running for a specified length, or starting at starting position
+and ending at a specified ending position.  Here is a function that
+takes the latter approach and requires in input string, a starting
+position, and an ending position.  If the ending position is 
+minus-one, the substring goes to the end of the input string.
+This function was taken from the rebol.org script library.
+    SUBSTRING: func [
+        "Return a substring from the start position to the end position"
+        INPUT-STRING [series!] "Full input string"
+        START-POS    [number!] "Starting position of substring"
+        END-POS      [number!] "Ending position of substring"
+    ] [
+        if END-POS = -1 [END-POS: length? INPUT-STRING]
+        return skip (copy/part INPUT-STRING END-POS) (START-POS - 1)
+    ]
+
+---Inter-computer communication
+
+One of the ideas in REBOL is that it can run on clients and servers,
+and REBOL programs can pass data around in REBOL-readable formats. 
+That is what is going on inside the REBOL IOS package mentioned on the
+REBOL web site.  More modest things can be done, as shown in some 
+samples below.
+
++++Message receiver on server
+
+This is a snippet that could be the core of a program that sits on a
+server and waits for a one-line message from some other computer, and
+then does something with that message. 
+
+The sample below has enough specific code to make it syntactically
+complete.  You would change that for your own situation.  There is
+a word for the INCOMING-MESSAGE and then a function called 
+PROCESS-MESSAGE that will do stuff with INCOMING-MESSAGE.
+
+The exact meaning of what you see below is something you will have to
+try to understand from the REBOL User Guide.  Some notes here might be
+helpful.  
+
+You have to open a "port" whatever that is, which has been made into
+a variety of the "series" datatype, so that you can use series functions
+on it.  You pop off the first thing in that "series" and you have a
+"connection" whatever that is.  You wait for some message to come in
+on that connection.  You copy off what comes in until there is nothing
+left, and then you close the connection and wait for another connection.
+
+In the sample, the port is opened with the "open/lines" refinement.
+That means you will get data a line at a time.  Without the "/lines"
+it seems you get a byte at a time.
+
+The reason there is a "foreach" loop for getting data from the connection
+is that there could in theory be several lines.  This sample was taken
+from a program that expects just one line.  If it received several lines,
+it appears that it will end up with only the last line in 
+INCOMING-MESSAGE.
+
+Note the "any" function.  That could be confusing.  What the "any"
+function does is take a block of stuff and return the first item in
+the block that is "true," which means that it has some data in it 
+(as opposed to "false" which you would get if the item had a value
+of "none").  In the sample, a block of two items is provided to the
+"any" function.  The first one is the data that we are receiving, 
+which is input lines on the CONNECTION-PORT.  That is what will be
+returned by the "any" function because it is what we are waiting for.
+The second item is an empty block so that if the results of the "copy"
+are "none," something "non-none" will be returned for the "foreach"
+function to work with, and the program will not crash. 
+    INCOMING-MESSAGE: ""
+    PROCESS-MESSAGE: does [
+    
+    ]
+    LISTEN-PORT: open/lines tcp://:8001
+    forever [
+        CONNECTION-PORT: first LISTEN-PORT
+        wait CONNECTION-PORT
+        INCOMING-MESSAGE: copy ""
+        foreach INPUT-LINE any [copy CONNECTION-PORT []] [
+            INCOMING-MESSAGE: INPUT-LINE
+            PROCESS-MESSAGE
+        ]
+        close CONNECTION-PORT
+    ]
+    close LISTEN-PORT
+
++++Message sender on client
+
+This snippet matches the one above.  You would start this on some
+computer that is on the same network as the receiving computer.
+Other code would build up a one-line OUTGOING-MESSAGE and then
+send it to the receiving computer in the following manner.
+    OUTGOING-MESSAGE: ""  
+    SERVER-PORT: open/lines tcp://servername:8001
+    insert SERVER-PORT OUTGOING-MESSAGE
+    close SERVER-PORT  
+
+---Logging
+
+Sometimes it is helpful to have a program display progress as it processes,
+or log events.  These are snippets that can be helpful in that area.
+
++++Count records processed
+
+One quick and dirty way to show progress while processing a large file is
+to display a record count of records processed.  Displaying after every
+single record is a bit much; displaying after every hundred seems like a
+good number.  In your program, at some point, you will have to set up a
+counter with a starting value of zero:
+
+    REC-COUNT: 0
+
+Then, inside a processing loop, produce a reassurring display every hundred
+records.  You could try to make a progress bar, but if you are writing a
+quick data-manipulation program for yourself, it is easy to print the result
+in a REBOL console.  Note that the escape key is used in the console to 
+cancel a running script.
+
+    REC-COUNT: REC-COUNT + 1 
+    if equal? remainder REC-COUNT 100 00 [
+        print [REC-COUNT " records processed; press esc to cancel."] 
+    ]
+

@@ -1,0 +1,736 @@
+REBOL lookup tables
+
+    This document explains how to do just on thing with REBOL, which is 
+    to make a table for looking up some data value based on some other
+    data value.  Examples might be a looking up a description based on
+    a code, an address for a name, an allowed value for some input field
+    on a window.  This is a common "data processing" operation.
+
+    These lookup tables could be built at run time by reading a file or
+    a database, or they could be pre-built and reside on disk as text
+    files.  Examples will be shwon for either way, which are essemtially
+    the same ways thanks to the REBOL "load" and "save" functions.
+
+===Target audience and references
+
+The target audience is a programmer who has to solve a problem that could
+be solved by looking up something in a table, and who is new enough to
+REBOL that he doesn't quite know how to start to solve that problem.
+
+Because this article is so specific, it assumes that the reader knows how
+to write and run REBOL scripts and is just tryihg to find out how to do
+this one operation, namely, create and use a table for looking up values.
+
+References
+
+<a href="http://www.rebol.com/docs/core23/rebolcore-6.html>
+REBOL documentation about the "series" data type</a>
+
+<a href="http://www.rebol.net/cookbook/recipes/0012.html">
+"A Micro Database" from the REBOL cookbook</a>
+
+<a href="http://www.cobolrebol.com/pages/documentation/FixedAndCSVFiles.html">
+Article about getting data out of files</a>
+
+<a href="http://www.rebol.com/docs/database.html">
+Article about getting data out a database</a>
+
+<a href="http://business-programming.com/business_programming.html">
+Nick Antonaccio's definitive guide about doing useful stuff with REBOL</a>
+
+===The central function, "select"
+
+Like other programming languages, REBOL has the concept of storing one thing
+after another.  Some might call it an array, REBOL calls it a series.
+The kind of series relevant to this topic is the "block" series where one
+thing after another is stored in a block.  Inside of memory, a block has
+its own structure, but when hard-coded into a source program the elements of 
+a block are put in the square brackets.
+
+    ["A" "Active" "I" "Inactive" "N" "New" "U" "Used" "D" "Discontinued"]
+
+REBOL uses a system of calling functions and getting back results.  You code
+the name of the function, the function is executed, and a returned result
+can be used in some way.
+
+Putting together the above two points leads to a way to make lookup tables
+when you know the key function for making that work, which is "select."
+
+The "select" function uses a supplied argument and searches a block for it.
+Then it returns the item in the block immediately after the found item,
+or "none" if the item is not found.  A value of "none" creates a "false"
+result when it is the subject of the "if" or "either" functions. 
+For example:
+
+    REBOL [
+        title: "Test harness"
+    ] 
+    
+    DESCRIPTION-TABLE:  [
+        "A" "Active" 
+        "I" "Inactive" 
+        "N" "New" 
+        "U" "Used" 
+        "D" "Discontinued"
+    ]
+    
+    print select DESCRIPTION-TABLE "A"
+    print select DESCRIPTION-TABLE "I"
+    print select DESCRIPTION-TABLE "N"
+    print select DESCRIPTION-TABLE "U"
+    print select DESCRIPTION-TABLE "D"
+    print select DESCRIPTION-TABLE "X"
+    
+    halt
+
+The above example produces:
+
+    Active
+    Inactive
+    New
+    Used
+    Discontinued
+    none
+    >>
+
+Notice that you can't have a situation where the code and its description are
+the same.  Or, you could, but it wouldn't work quite right and it would make 
+no sense to do that. 
+
+We can take advantage of the fact that if an item is not found "none" is 
+returned.  Many times when you search a table you want to pull out the thing
+you have found and do something with it.  If you don't find what you are
+looking for, you want to do something else, like maybe do something to
+indicate that the value you searched for is an undefined value.
+
+    REBOL [
+        title: "Test harness"
+    ] 
+    
+    DESCRIPTION-TABLE:  [
+        "A" "Active" 
+        "I" "Inactive" 
+        "N" "New" 
+        "U" "Used" 
+        "D" "Discontinued"
+    ]
+    
+    GET-DESCRIPTION: func [
+        STATUS-CODE
+    ] [
+        if not DESCRIPTION: select DESCRIPTION-TABLE STATUS-CODE [
+            DESCRIPTION: copy "Undefined"
+        ]
+        return DESCRIPTION
+    ]
+    
+    print ["A is " GET-DESCRIPTION "A"]
+    print ["X is " GET-DESCRIPTION "X"]
+    
+    halt
+
+The above produces:
+
+    A is  Active
+    X is  Undefined
+    >>
+
+In the function, notice the colon after DESCRIPTION.  What happens in that
+line of code is that the "select" function returns a value, or none, and
+the word DESCRIPTION is set to refer to it.  Then when DESCRIPTION is used
+with the "if" function, a valid value produces true, and a "none" value
+produces false.  If we get false, we assign the text "Undefined" to 
+description.  
+
+The same technique works if a table has more than one value for the key 
+item.  In that case, "more than one item" can be put in a block, as in
+this example of a table of customer service representatives identified 
+by a code number which can be used to obtain their names and telephone
+extensions.
+
+    REBOL [
+        title: "Test harness"
+    ] 
+    
+    TECHNICIAN-TABLE:  [
+        "21" ["Adam" "1001"]
+        "22" ["Bob" "1002"]
+        "23" ["Charles" "1003"]
+    ]
+    
+    TECHNICIAN-CODE: "22"
+    
+    either TECHNICIAN-BLOCK: select TECHNICIAN-TABLE TECHNICIAN-CODE [
+        TECHNICIAN-NAME: copy TECHNICIAN-BLOCK/1
+        TECHNICIAN-EXTENSION: copy TECHNICIAN-BLOCK/2
+    ] [
+        TECHNICIAN-NAME: copy ""
+        TECHNICIAN-EXTENSION: copy ""
+    ]
+    
+    print TECHNICIAN-NAME
+    print TECHNICIAN-EXTENSION
+    
+    halt
+
+The above produces:
+
+    Bob
+    1002
+    >>
+
+The "select" function returns whatever is after the item searched for,
+which in this case is a block.  The items in the block can be referenced
+with the "path" notation.
+
+If you don't worry about space and want the code to be a little more
+readable, you can make a table like this:
+
+    REBOL [
+        title: "Test harness"
+    ]
+    TECHNICIAN-TABLE:  [
+        "21" [NAME "Adam" EXTENSION "1001"]
+        "22" [NAME "Bob" EXTENSION "1002"]
+        "23" [NAME "Charles" EXTENSION "1003"]
+    ]
+    TECHNICIAN-CODE: "22"
+    either TECHNICIAN-BLOCK: select TECHNICIAN-TABLE TECHNICIAN-CODE [
+        TECHNICIAN-NAME: copy TECHNICIAN-BLOCK/NAME
+        TECHNICIAN-EXTENSION: copy TECHNICIAN-BLOCK/EXTENSION
+    ] [
+        TECHNICIAN-NAME: copy ""
+        TECHNICIAN-EXTENSION: copy ""
+    ]
+    print TECHNICIAN-NAME
+    print TECHNICIAN-EXTENSION
+    halt
+    
+In this case, you put a word in front of the value in the value block,
+and the path notation can use that word to find the value after it.
+The result of running the above example is the same as the one before it.    
+
+===Getting table data
+
+It usually is not the best idea to hard-code data into source code.
+How do we get table data into memory so it can be searched?
+
+---From a text file
+
+The easiest way, if you have a small table and can live without a 
+graphical interface, is to type it into a file with a text editor.
+The REBOL "load" function will allow you to bring in that data with
+one line of code.  To make a test file for the following example,
+run this script:
+
+    REBOL [
+        title: "Test harness"
+    ] 
+    
+    CODE-TABLE: {"A" "Active"
+    "I" "Inactive" 
+    "N" "New" 
+    "U" "Used" 
+    "D" "Discontinued"}
+    
+    write %testtable.txt CODE-TABLE
+    
+    halt
+
+If you list the output file with a text editor, it will look like
+this: 
+
+    "A" "Active"
+    "I" "Inactive" 
+    "N" "New" 
+    "U" "Used" 
+    "D" "Discontinued"
+
+With the REBOL "load" function, you can bring that file into memory
+and the results will be put into a block.  Then you will have the same
+thing as produced above by hard-coding the table in the source code.
+
+    REBOL [
+        title: "Test harness"
+    ] 
+    
+    CODE-TABLE: load %testtable.txt 
+    
+    probe type? CODE-TABLE
+    probe CODE-TABLE/1
+    probe CODE-TABLE/2
+    probe CODE-TABLE/3
+    probe CODE-TABLE/4
+    probe CODE-TABLE/5
+    probe CODE-TABLE/6
+    
+    print select CODE-TABLE "I"
+    
+    halt
+
+The above produces:
+
+    block!
+    "A"
+    "Active"
+    "I"
+    "Inactive"
+    "N"
+    "New"
+    Inactive
+    >>
+
+---From a CSV file 
+
+Not everyone is a believe in the simplicity of text files. 
+A spreadsheet is a popular if misused data storage device, and the 
+contents can be exported to a CSV (Comma-Separated Value) file.
+Run the following script to make a test file.
+
+    REBOL [
+        title: "Test harness"
+    ] 
+    
+    CSR-TABLE: {21,Adam,1001
+    22,Bob,1002
+    23,Charles,1003
+    24,Donald,1005}
+    
+    write %testtable.csv CSR-TABLE
+    
+    halt
+
+The resulting file will look like this:
+
+    21,Adam,1001
+    22,Bob,1002
+    23,Charles,1003
+    24,Donald,1005
+
+A file like the above can be read, taken apart, reassembled into a block
+in memory, and then used as a lookup table.  Depending on how stable the
+data is, this operation could be done at run time every time the program
+is run, or it could be donw once, the resulting block could be saved to
+a file with the "save" function, and then the saved file could be reloaded
+at every run time with the "load" function.  The "load" and "save" functions
+are companion functions for writing out and bringing in data in a format
+the REBOL can make use of. 
+
+To make use of the data in the CSV file, we have to do a little work.
+We will read the file into memory as a block of lines.  Then, for each
+line, we will divide it up based on the commas.  The result of that
+division will be a block of strings, one string for each field scanned
+based on the commas.  Then, for each of those fields, we will append
+them to an ever-increasing block that will become the final lookup table.
+In this sample case, the "key" value of the table is going to be that
+two-digit number, and the "attributes" of the key value are going to be
+a block consisting of the name and extension, like the earlier example.
+Make note that when we append a block to the lookup table, we will have
+to use the "append/only" function to get that block to remain a block.
+
+The script below shows how you might take apart the CSV file.
+Note the use of the "reduce" function to cause the words in the following
+block to be evaluated and replaced with their values.
+
+    REBOL [
+        title: "Test harness"
+    ] 
+    
+    CSR-TABLE: copy []
+    
+    TABLE-CSV: read/lines %testtable.csv 
+    
+    foreach TABLE-LINE TABLE-CSV [
+        FIELD-BLOCK: copy []
+        FIELD-BLOCK: parse TABLE-LINE ","
+        append CSR-TABLE FIELD-BLOCK/1
+        append/only CSR-TABLE reduce [FIELD-BLOCK/2 FIELD-BLOCK/3]
+    ]
+    
+    probe type? CSR-TABLE
+    probe CSR-TABLE/1
+    probe CSR-TABLE/2
+    probe CSR-TABLE/3
+    probe CSR-TABLE/4
+    probe CSR-TABLE/5
+    probe CSR-TABLE/6
+    
+    probe select CSR-TABLE "24"
+    
+    ;; Optinoally,...
+    save %testtable.txt CSR-TABLE
+    
+    halt
+
+The above produces:
+
+    block!
+    "21"
+    ["Adam" "1001"]
+    "22"
+    ["Bob" "1002"]
+    "23"
+    ["Charles" "1003"]
+    ["Donald" "1005"]
+    >>
+    
+If you list the saved file, you see that the saved data is all on one line.
+
+    "21" ["Adam" "1001"] "22" ["Bob" "1002"] "23" ["Charles" "1003"] "24" ["Donald" "1005"]
+
+The line-feed characters are white space to the "load" and "save" functions,
+it seems. If you had typed the data by hand, you could have put it all on one
+line, or you could have put each table on its own line for readability, like
+we did in the earlier examples.
+
+---From other sources
+
+If the data you want to put into a lookup table is elsewhere, you can use the
+above techniques as long as you can get your hands on the data. 
+On common location is a database accessible with SQL.  If you can write
+a query to get the data and then can read through the fields you obtain,
+you can append them to a block as shown above and use the resulting block
+for a lookup table.  Unfortunately, we don't have a common database so it is
+not possible to show here an example of that.
+
+===A table-building module
+
+Whenever you solve some programming problem, it is nice not to have to
+solve it ever again. One lookup table is a lot like another, but not
+always exactly the same.  If we could capture the essence of the
+operation we might be able to make one table module that could work for
+most situations.  Here is one idea for that. 
+
+This module makes a lookup table as an object.  It has one key per entry,
+but not just one attribute per key, not just a block of attributes per
+key, but a block of several attributes each of which can be a block.
+As an added feature, a table can be built up from data that is not
+necessarily in order, because adding an item to the table first checks
+to see if other items for the given key have been added already, and
+if so, adds the new attributes to the existing ones.  
+
+The module was written originally for a specific problem, so it has
+some documenting comments which have been left in.
+
+    REBOL [
+        Title: "Multi-block lookup table"
+        Purpose: {Provide an object that is a lookup table that has a single
+        key value and a block of attributes, but each attribute is itself 
+        another block.  Originally written to make a table of properties
+        with multiple detached garages.}
+    ]
+    
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This module provides an object for a particular type of lookup table.     ]
+    ;; [ The table has one key value, and a block of attributes.  The block of     ]
+    ;; [ attributes is a block of blocks.  Something like this:                    ]
+    ;; [                                                                           ]
+    ;; [ key1 [ [attr-1-1-1 attr-1-1-2 ...] [attr-1-2-1 attr-1-2-2 ...] ... ]      ]
+    ;; [ key2 [ [attr-2-1-1 attr-2-1-2 ...] [attr-2-2-1 attr-2-2-2 ...] ... ]      ]
+    ;; [ key3 [ [attr-3-1-1 attr-3-1-2 ...] [attr-3-2-1 attr-3-2-2 ...] ... ]      ]
+    ;; [ ...                                                                       ]
+    ;; [                                                                           ]
+    ;; [ Functions are provided for adding new keys, adding new attribute          ]
+    ;; [ sub-blocks to existing attribute blocks.                                  ]
+    ;; [                                                                           ]
+    ;; [ Adding items.                                                             ]
+    ;; [ When we add an item, we would like to have a key, and one of the          ]
+    ;; [ sub-blocks, and get those into the table.  In this situation, the key     ]
+    ;; [ might not be in the table at all, or it might be in there from a          ]
+    ;; [ previous addition.  If it is not there at all, we would want to add       ]
+    ;; [ it with an attribute containing the given sub-block.  If it is there      ]
+    ;; [ from a previous insertion, we would want to find the attribute block      ]
+    ;; [ for the key and add the sub-block to the existing attribute block.        ]
+    ;; [                                                                           ]
+    ;; [ Searching for items.                                                      ]
+    ;; [ Because of the power of REBOL, it is not necessary to write a             ]
+    ;; [ search function.  The caller can use the existing "select"                ]
+    ;; [ function to return the attribute block for a given key.                   ]
+    ;; [                                                                           ]
+    ;; [ Saving and loading.                                                       ]
+    ;; [ The expected use of this module is to create a lookup table and then      ]
+    ;; [ save it to disk for use by some other program.  That other program        ]
+    ;; [ would use this module to load the file for lookups.                       ]
+    ;; [---------------------------------------------------------------------------]
+
+    MBLT: make object! [
+
+        FILE-ID: %MBLT.txt
+        TBL: []      ;; The whole table
+        REC: []      ;; Attribute block for one key
+
+    ;;  Add an item.
+    ;;  Call the function with a key value and a sub-block
+    ;;  to be added to the attribute block for the key.  
+        ADD-ITEM: func [
+            KEY
+            BLK
+            /local INSERTPOINT
+        ] [
+            TBL: head TBL
+            either INSERTPOINT: find TBL KEY [
+                INSERTPOINT: next INSERTPOINT
+                REC: first INSERTPOINT
+                append/only REC BLK
+                change/only INSERTPOINT REC
+            ] [
+                append TBL KEY
+                REC: copy []
+                append/only REC BLK
+                append/only TBL REC
+            ]
+            TBL: head TBL 
+        ]        
+
+    ;;  Save the table to a file for later loading.
+        SAVE-TBL: does [
+            save FILE-ID TBL
+        ]
+
+    ;;  Load a saved table.
+        LOAD-TBL: does [
+            TBL: copy []
+            TBL: load FILE-ID
+        ]
+    ]
+
+    ;;Uncomment to test
+    ;MBLT/ADD-ITEM 1 ["1-1-1" "1-1-2"]
+    ;MBLT/ADD-ITEM 2 ["2-1-1" "2-1-2"]
+    ;MBLT/ADD-ITEM 3 ["3-1-1" "3-1-2"]
+    ;MBLT/ADD-ITEM 4 ["4-1-1" "4-1-2"]
+    ;MBLT/ADD-ITEM 2 ["2-2-1" "2-2-2"]
+    ;MBLT/ADD-ITEM 4 ["4-2-1" "4-2-2"]
+    ;MBLT/ADD-ITEM 5 ["5-1-1" "5-1-2"]
+    ;MBLT/ADD-ITEM 2 ["2-3-1" "2-3-2"]
+    ;print "TBL after a few additions:"
+    ;foreach [KEYVAL ATTRBLK] MBLT/TBL [
+    ;    print [KEYVAL ":" mold ATTRBLK]
+    ;]
+    ;print "--------------------------"
+    ;print "Find a few:"
+    ;print ["5:" mold select MBLT/TBL 5]
+    ;print ["2:" mold select MBLT/TBL 2]
+    ;print ["6:" mold select MBLT/TBL 6]
+    ;halt
+    
+===Another table-building module
+
+Another idea for a lookup table, in contrast to having a separate table
+for each kind of thing to look up, would be to put all tables into one
+big table, so everything is in one place.  Here is a module that contains
+one structure that holds many lookup tables for simple descriptions of
+codes.  Each type of code is identified by a category.  So to look up
+a description for a code, you have to have the category, which then
+points to the correct table for that code.
+
+The code sample below contains comments to further describe the idea.
+
+    REBOL [
+        Title: "Multi-Category Description Table"
+        Purpose: {An object for create a description lookup table
+        that can combine several tables into one, with the tables
+        identified by a category code.}
+    ]
+
+    ;; [---------------------------------------------------------------------------]
+    ;; [ This is a module to address a situation that comes up in database work.   ]
+    ;; [ If a database has various codes that represent things, it is nice to      ]
+    ;; [ provide descriptions of those codes in anything produced for human use.   ]
+    ;; [ If the actual code is the description, that can use up space in the       ]
+    ;; [ database, and the description never can change unless one wants to go     ]
+    ;; [ through the entire databse and change any descriptions that already are   ]
+    ;; [ in there.  So it is customary to use codes to represent things, and to    ]
+    ;; [ put the human-readable meaning of the codes in another table.             ]
+    ;; [ If a database has many codes, that can result in many description         ]
+    ;; [ tables, OR, one can find a way to put all such codes and their            ]
+    ;; [ descriptions into one big table.  This module is a way to do that.        ]
+    ;; [                                                                           ]
+    ;; [ The end result of this will be a bunch of description tables, each        ]
+    ;; [ consisting of a bunch of codes with a description for each code.          ]
+    ;; [ Each table will be identified by a category code.                         ]
+    ;; [ So, to find a description for some code, you have to find the table it    ]
+    ;; [ is in by supplying the category code, and also the code for which         ]
+    ;; [ you want the description.  This will be implemented in a big block        ]
+    ;; [ that will look like this:                                                 ]
+    ;; [                                                                           ]
+    ;; [ [                                                                         ]
+    ;; [     category-1 [code-1-1 desc-1-1 code-1-2 desc-1-2 ...]                  ]
+    ;; [     category-2 [code-2-1 desc-2-1 code-2-2 desc-2-2 ...]                  ]
+    ;; [     category-3 [code-3-1 desc-3-1 code-3-2 desc-3-2 ...]                  ]
+    ;; [ ]                                                                         ]
+    ;; [                                                                           ]
+    ;; [ With a structure like this, if we want to find the descripion for a       ]
+    ;; [ certain code in a certain category, we just have to "select" on the       ]
+    ;; [ category to get the table, and then select code to get the description.   ]
+    ;; [ This module provides a function to do that.                               ]
+    ;; [                                                                           ]
+    ;; [ Also, we have to build that multi-category table in the first place.      ]
+    ;; [ A function is provided so you can supply a caegory, a code, and a         ]
+    ;; [ description and they will be put into the table.                          ]
+    ;; [ In case you can get your table data into a block of blocks, perhaps       ]
+    ;; [ as the result of an SQL query, a function is provided to load the         ]
+    ;; [ table from that direction.                                                ]
+    ;; [                                                                           ]
+    ;; [ More specifically:                                                        ]
+    ;; [                                                                           ]
+    ;; [ LOAD-ENTRY category code description                                      ]
+    ;; [ This function is called repeatedly to load codes into the table.          ]
+    ;; [ If you want to save the final table and have it look nice, you could      ]
+    ;; [ provide the items in category-code order, but it is not necessary.        ]
+    ;; [ It should not matter what types of data you use for the category,         ]
+    ;; [ code, and description, but usually these would be strings.                ]
+    ;; [                                                                           ]
+    ;; [ LOAD-RESULTSET resultset                                                  ]
+    ;; [ This function is called with all the table data in a block of blocks,     ]
+    ;; [ where each sub-block contains a category, a code, and a description,      ]
+    ;; [ all of them strings.  The function will call LOAD-ENTRY repeatedly        ]
+    ;; [ for all the sub-blocks in the outer block.                                ]
+    ;; [                                                                           ]
+    ;; [ GET-DESCRIPTION category code                                             ]
+    ;; [ This function returns the description string for the code supplied.       ]
+    ;; [                                                                           ]
+    ;; [ SAVE-TABLE file-id                                                        ]
+    ;; [ This function saves a finished table to a text file.                      ]
+    ;; [                                                                           ]
+    ;; [ LOAD-TABLE file-id                                                        ]
+    ;; [ This function loads a table previously saved with the SAVE-TABLE          ]
+    ;; [ function.                                                                 ]
+    ;; [                                                                           ]
+    ;; [ And finally, all this is packaged into an object so you could have        ]
+    ;; [ several such table in your program, although the purpose of this          ]
+    ;; [ object in the first place is so that you don't need more than one         ]
+    ;; [ table.                                                                    ]
+    ;; [---------------------------------------------------------------------------]
+
+    MCDT: make object! [
+
+        DESCRIPTIONS: []
+
+        LOAD-ENTRY: func [
+            CATEGORY
+            CODE
+            DESCRIPTION
+            /local LOC BLK
+        ] [
+            LOC: head DESCRIPTIONS
+            LOC: find DESCRIPTIONS CATEGORY
+            either LOC [
+                BLK: first next LOC ;; a reference, not a copy 
+                append BLK CODE
+                append BLK DESCRIPTION
+            ] [
+                BLK: copy []
+                append BLK CODE
+                append BLK DESCRIPTION
+                append DESCRIPTIONS CATEGORY
+                append/only DESCRIPTIONS BLK
+            ]
+        ]
+
+        LOAD-RESULTSET: func [
+            RESULTSET
+        ] [
+            DESCRIPTIONS: copy []
+            foreach SUBBLOCK RESULTSET [
+                LOAD-ENTRY SUBBLOCK/1 SUBBLOCK/2 SUBBLOCK/3
+            ]
+        ]
+
+        GET-DESCRIPTION: func [
+            CATEGORY
+            CODE
+        ] [
+            either TBL: select DESCRIPTIONS CATEGORY [
+                return SELECT TBL CODE
+            ] [
+                return none
+            ]
+        ]
+
+        SAVE-TABLE: func [
+            FILE-ID
+        ] [
+    ;;      save FILE-ID DESCRIPTIONS
+            if exists? FILE-ID [
+            delete FILE-ID 
+            ]
+            foreach [CATEGORY TABLE] DESCRIPTIONS [
+                write/append FILE-ID rejoin [
+                    mold CATEGORY
+                    " ["
+                    newline
+                ]
+                foreach [CODE DESC] TABLE [
+                    write/append FILE-ID rejoin [
+                        "    "
+                        mold CODE 
+                        " "
+                        mold DESC
+                        newline
+                    ]
+                ]
+                write/append FILE-ID rejoin [
+                    "]"
+                    newline
+                ]
+            ]
+        ]
+
+        LOAD-TABLE: func [
+            FILE-ID
+        ] [
+            DESCRIPTIONS: copy []
+            DESCRIPTIONS: load FILE-ID
+        ]
+    ]
+
+    ;;Uncomment to test
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "1" "North"
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "2" "Northeast"
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "3" "East"
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "4" "Southeast"
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "5" "South"
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "6" "Southwest"
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "7" "West"
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "8" "Northwest"
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "9" "Shifting winds"
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "N" "None/Calm"
+    ;MCDT/LOAD-ENTRY "WIND-DIR" "U" "Undetermined"
+    ;MCDT/LOAD-ENTRY "TAKEN" "0" "Taken to other"
+    ;MCDT/LOAD-ENTRY "TAKEN" "1" "Hospital"
+    ;MCDT/LOAD-ENTRY "TAKEN" "2" "Doctor's office"
+    ;MCDT/LOAD-ENTRY "TAKEN" "3" "Morgue or funeral home"
+    ;MCDT/LOAD-ENTRY "TAKEN" "4" "Residence"
+    ;MCDT/LOAD-ENTRY "TAKEN" "5" "Station or quarters"
+    ;MCDT/LOAD-ENTRY "TAKEN" "6" "Not transported"
+    ;MCDT/LOAD-ENTRY "ACENGINE" "1" "Jet"
+    ;MCDT/LOAD-ENTRY "ACENGINE" "2" "Turbo Prop"
+    ;MCDT/LOAD-ENTRY "ACENGINE" "3" "Propeller"
+    ;MCDT/LOAD-ENTRY "ACENGINE" "4" "None (Glider)"
+    ;foreach [CATEGORY TABLE] MCDT/DESCRIPTIONS [
+    ;    print [CATEGORY mold TABLE]
+    ;]
+    ;print "------------------------------------"
+    ;print ["ACENGINE 2 = " MCDT/GET-DESCRIPTION "ACENGINE" "2"]
+    ;print ["WIND-DIR 6 = " MCDT/GET-DESCRIPTION "WIND0DIR" "6"] ;; error
+    ;print ["WIND-DIR U = " MCDT/GET-DESCRIPTION "WIND-DIR" "U"]
+    ;print ["TAKEN 7 = " MCDT/GET-DESCRIPTION "TAKEN" "7"]
+    ;print "------------------------------------"
+    ;MCDT/SAVE-TABLE %tbltest.txt
+    ;MCDT/LOAD-TABLE %tbltest.txt
+    ;RESULTSET: [
+    ;    ["ACFUEL" "1" "Jet Aviation Fuel"]
+    ;    ["ACFUEL" "2" "Aviation Gasoline"]
+    ;    ["ACFUEL" "3" "Other type of fuel"]
+    ;    ["PAT_STAT" "1" "Improved"]
+    ;    ["PAT_STAT" "2" "Remained Same"]
+    ;    ["PAT_STAT" "3" "Worsened"]
+    ;]
+    ;MCDT/LOAD-RESULTSET RESULTSET
+    ;foreach [CATEGORY TABLE] MCDT/DESCRIPTIONS [
+    ;    print [CATEGORY mold TABLE]
+    ;]
+    ;halt
+    
+          
